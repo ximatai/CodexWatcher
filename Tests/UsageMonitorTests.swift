@@ -21,6 +21,7 @@ final class UsageMonitorTests: XCTestCase {
             let script = #"""
             #!/bin/sh
             fixture_dir=$(/usr/bin/dirname "$0")
+            account_reads=0
             while IFS= read -r line; do
               printf '%s\n' "$line" >> "$fixture_dir/requests.jsonl"
               id=$(printf '%s' "$line" | /usr/bin/sed -n 's/.*"id":\([0-9][0-9]*\).*/\1/p')
@@ -32,8 +33,15 @@ final class UsageMonitorTests: XCTestCase {
                     printf '{"id":%s,"error":{"code":-32000}}\n' "$id"
                     continue
                   fi
+                  if [ -f "$fixture_dir/delay-usage" ]; then /bin/sleep 0.2; fi
                   result=$(/bin/cat "$fixture_dir/usage.json") ;;
-                *account*read*) result=$(/bin/cat "$fixture_dir/account.json") ;;
+                *account*read*)
+                  account_reads=$((account_reads + 1))
+                  if [ "$account_reads" -eq 3 ] && [ -f "$fixture_dir/replace-on-preflight" ]; then
+                    /bin/cp "$fixture_dir/next-account.json" "$fixture_dir/account.json"
+                    /bin/cp "$fixture_dir/next-usage.json" "$fixture_dir/usage.json"
+                  fi
+                  result=$(/bin/cat "$fixture_dir/account.json") ;;
                 *account*logout*)
                   if [ -f "$fixture_dir/reject-logout" ]; then
                     printf '{"id":%s,"error":{"code":-32000}}\n' "$id"
@@ -57,7 +65,7 @@ final class UsageMonitorTests: XCTestCase {
             try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: executable.path)
             client = AppServerClient(executablePath: executable.path,
                                      runtimeDirectory: directory.appendingPathComponent("Runtime"),
-                                     requestTimeout: .seconds(1))
+                                     requestTimeout: .seconds(3))
             monitor = UsageMonitor(client: client, defaults: defaults)
             store = ResetAttemptStore(directory: directory.appendingPathComponent("State"))
             try writeAccount("account-a")
@@ -68,13 +76,14 @@ final class UsageMonitorTests: XCTestCase {
             try write(["account": ["type": "chatgpt", "email": "\(id)@example.invalid", "planType": "pro"]], to: "account.json")
         }
 
-        func writeUsage(owner: String = "account-a", includeCard: Bool = true) throws {
+        func writeUsage(owner: String = "account-a", includeCard: Bool = true,
+                        expirySeconds: TimeInterval = 3600, usedPercent: Double = 40) throws {
             let now = Date().timeIntervalSince1970
             try write([
                 "accountId": owner,
-                "rateLimits": ["limitId": "codex", "primary": ["usedPercent": 40, "windowDurationMins": 60, "resetsAt": now + 1800]],
+                "rateLimits": ["limitId": "codex", "primary": ["usedPercent": usedPercent, "windowDurationMins": 60, "resetsAt": now + 1800]],
                 "rateLimitResetCredits": ["availableCount": includeCard ? 1 : 0,
-                    "credits": includeCard ? [["id": "card-a", "status": "available", "resetType": "codexRateLimits", "grantedAt": now - 60, "expiresAt": now + 3600]] : []]
+                    "credits": includeCard ? [["id": "card-a", "status": "available", "resetType": "codexRateLimits", "grantedAt": now - 60, "expiresAt": now + expirySeconds]] : []]
             ], to: "usage.json")
         }
 
@@ -103,6 +112,211 @@ final class UsageMonitorTests: XCTestCase {
             defaults.removePersistentDomain(forName: suite)
             try? FileManager.default.removeItem(at: directory)
         }
+    }
+
+    func testExpiryHandlingDefaultsOffAndZeroUsageStillAutomaticallyAttemptsOnce() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.writeUsage(expirySeconds: 800, usedPercent: 0)
+        try await fixture.refresh()
+        await fixture.monitor.processExpiringCredits()
+        XCTAssertTrue(try fixture.consumeRequests().isEmpty)
+        await fixture.monitor.configureExpiryHandling(.automatic)
+        await fixture.monitor.processExpiringCredits()
+        XCTAssertEqual(try fixture.consumeRequests().count, 1)
+        // The fake server intentionally keeps returning the same available card.
+        await fixture.monitor.processExpiringCredits()
+        XCTAssertEqual(try fixture.consumeRequests().count, 1)
+        fixture.monitor.shutdown()
+        let restartedClient = AppServerClient(executablePath: fixture.client.executablePath,
+            runtimeDirectory: fixture.client.runtimeDirectory)
+        let restarted = UsageMonitor(client: restartedClient, defaults: fixture.defaults)
+        defer { restarted.shutdown() }
+        await restarted.processExpiringCredits()
+        XCTAssertEqual(try fixture.consumeRequests().count, 1, "Restart must not create a new consume request")
+    }
+
+    func testExpiryReminderNeedsPermissionAndOnlyOpensManualConfirmation() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.writeUsage(expirySeconds: 800)
+        try await fixture.refresh()
+        fixture.monitor.requestExpiryNotificationPermission = { false }
+        await fixture.monitor.configureExpiryHandling(.remind)
+        XCTAssertEqual(fixture.monitor.expiryConfiguration.mode, .off)
+        fixture.monitor.requestExpiryNotificationPermission = { true }
+        var reminders: [CreditExpiryReminder] = []
+        fixture.monitor.deliverExpiryReminder = { reminders.append($0) }
+        await fixture.monitor.configureExpiryHandling(.remind)
+        await fixture.monitor.processExpiringCredits()
+        await fixture.monitor.processExpiringCredits()
+        XCTAssertEqual(reminders.count, 1)
+        XCTAssertTrue(try fixture.consumeRequests().isEmpty)
+        let reminder = try XCTUnwrap(reminders.first)
+        await fixture.monitor.reviewExpiringCredit(accountKey: reminder.accountKey, creditID: reminder.creditID)
+        XCTAssertEqual(fixture.monitor.expiryReview?.creditID, "card-a")
+        XCTAssertTrue(try fixture.consumeRequests().isEmpty)
+        XCTAssertNil(try fixture.store.pending(for: "account-a"))
+    }
+
+    func testFailedExpiryNotificationCanBeRetriedWithoutConsuming() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.writeUsage(expirySeconds: 800)
+        try await fixture.refresh()
+        fixture.monitor.requestExpiryNotificationPermission = { true }
+        fixture.monitor.deliverExpiryReminder = { _ in throw WatcherError.message("denied") }
+        await fixture.monitor.configureExpiryHandling(.remind)
+        await fixture.monitor.processExpiringCredits()
+        var delivered = 0
+        fixture.monitor.deliverExpiryReminder = { _ in delivered += 1 }
+        await fixture.monitor.processExpiringCredits()
+        XCTAssertEqual(delivered, 1)
+        XCTAssertTrue(try fixture.consumeRequests().isEmpty)
+    }
+
+    func testAutomaticExpiryStopsOnAccountChangePendingRequestAndReadFailure() async throws {
+        for reason in ["account", "pending", "read"] {
+            let fixture = try Fixture()
+            defer { fixture.cleanup() }
+            try fixture.writeUsage(expirySeconds: 800)
+            try await fixture.refresh()
+            await fixture.monitor.configureExpiryHandling(.automatic)
+            switch reason {
+            case "account":
+                try fixture.writeAccount("account-b")
+                try fixture.writeUsage(owner: "account-b", expirySeconds: 800)
+            case "pending": _ = try fixture.store.prepare(creditID: "card-b", owner: "account-a")
+            default: try fixture.marker("reject-usage")
+            }
+            await fixture.monitor.processExpiringCredits()
+            XCTAssertTrue(try fixture.consumeRequests().isEmpty, reason)
+        }
+    }
+
+    func testAutomaticExpiryDoesNotRetryUnknownOutcome() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.writeUsage(expirySeconds: 800)
+        try await fixture.refresh()
+        await fixture.monitor.configureExpiryHandling(.automatic)
+        try fixture.marker("hang-consume")
+        await fixture.monitor.processExpiringCredits()
+        let pending = try XCTUnwrap(fixture.monitor.pendingRedemption)
+        try fixture.removeMarker("hang-consume")
+        await fixture.monitor.processExpiringCredits()
+        XCTAssertEqual(try fixture.consumeRequests().count, 1)
+        XCTAssertEqual(fixture.monitor.pendingRedemption?.idempotencyKey, pending.idempotencyKey)
+        let retry = try XCTUnwrap(fixture.monitor.makeResetConfirmation(for: nil))
+        await fixture.monitor.redeem(retry)
+        let params = try XCTUnwrap(fixture.consumeRequests().last?["params"] as? [String: Any])
+        XCTAssertEqual(params["idempotencyKey"] as? String, pending.idempotencyKey)
+    }
+
+    func testDisablingDuringExpiryRefreshPreventsAutomaticConsumption() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.writeUsage(expirySeconds: 800)
+        try await fixture.refresh()
+        await fixture.monitor.configureExpiryHandling(.automatic)
+        try fixture.marker("delay-usage")
+        let check = Task { await fixture.monitor.processExpiringCredits() }
+        while !fixture.monitor.isBusy { await Task.yield() }
+        await fixture.monitor.configureExpiryHandling(.off)
+        await check.value
+        XCTAssertTrue(try fixture.consumeRequests().isEmpty)
+        XCTAssertEqual(fixture.monitor.expiryConfiguration.mode, .off)
+    }
+
+    func testExpiryAutoOutsideLeadWindowAndExpiredCardsDoNotConsume() async throws {
+        for seconds: Double in [1000, -1, 0] {
+            let fixture = try Fixture()
+            defer { fixture.cleanup() }
+            try fixture.writeUsage(expirySeconds: seconds)
+            try await fixture.refresh()
+            await fixture.monitor.configureExpiryHandling(.automatic)
+            await fixture.monitor.processExpiringCredits()
+            XCTAssertTrue(try fixture.consumeRequests().isEmpty)
+        }
+    }
+
+    func testConcurrentExpiryMonitorsSendOnlyOneConsumption() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.writeUsage(expirySeconds: 800)
+        try await fixture.refresh()
+        await fixture.monitor.configureExpiryHandling(.automatic)
+        let other = UsageMonitor(client: AppServerClient(executablePath: fixture.client.executablePath,
+            runtimeDirectory: fixture.client.runtimeDirectory), defaults: fixture.defaults)
+        defer { other.shutdown() }
+        async let first: Void = fixture.monitor.processExpiringCredits()
+        async let second: Void = other.processExpiringCredits()
+        _ = await (first, second)
+        XCTAssertEqual(try fixture.consumeRequests().count, 1)
+    }
+
+    func testNotificationClickForAnotherAccountCannotOpenConfirmation() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.writeUsage(expirySeconds: 800)
+        try await fixture.refresh()
+        try fixture.writeAccount("account-b")
+        try fixture.writeUsage(owner: "account-b", expirySeconds: 800)
+        await fixture.monitor.reviewExpiringCredit(accountKey: "account-a", creditID: "card-a")
+        XCTAssertNil(fixture.monitor.expiryReview)
+        XCTAssertTrue(try fixture.consumeRequests().isEmpty)
+    }
+
+    func testDeniedReminderPermissionStopsPreviouslyEnabledAutomaticMode() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.writeUsage(expirySeconds: 800)
+        try await fixture.refresh()
+        await fixture.monitor.configureExpiryHandling(.automatic)
+        fixture.monitor.requestExpiryNotificationPermission = { false }
+        await fixture.monitor.configureExpiryHandling(.remind)
+        XCTAssertEqual(fixture.monitor.expiryConfiguration.mode, .off)
+        await fixture.monitor.processExpiringCredits()
+        XCTAssertTrue(try fixture.consumeRequests().isEmpty)
+    }
+
+    func testAutomaticExpiryRevalidatesAccountAndCardImmediatelyBeforeSending() async throws {
+        for change in ["account", "expiry"] {
+            let fixture = try Fixture()
+            defer { fixture.cleanup() }
+            try fixture.writeUsage(expirySeconds: 800)
+            try await fixture.refresh()
+            await fixture.monitor.configureExpiryHandling(.automatic)
+            let account = try Data(contentsOf: fixture.directory.appendingPathComponent("account.json"))
+            let usage = try Data(contentsOf: fixture.directory.appendingPathComponent("usage.json"))
+            try fixture.writeAccount(change == "account" ? "account-b" : "account-a")
+            try fixture.writeUsage(owner: change == "account" ? "account-b" : "account-a",
+                                   expirySeconds: change == "expiry" ? -1 : 800)
+            try FileManager.default.copyItem(at: fixture.directory.appendingPathComponent("account.json"),
+                                            to: fixture.directory.appendingPathComponent("next-account.json"))
+            try FileManager.default.copyItem(at: fixture.directory.appendingPathComponent("usage.json"),
+                                            to: fixture.directory.appendingPathComponent("next-usage.json"))
+            try account.write(to: fixture.directory.appendingPathComponent("account.json"))
+            try usage.write(to: fixture.directory.appendingPathComponent("usage.json"))
+            try fixture.marker("replace-on-preflight")
+            await fixture.monitor.processExpiringCredits()
+            XCTAssertTrue(try fixture.consumeRequests().isEmpty, change)
+            XCTAssertNil(try fixture.store.pending(for: "account-a"))
+        }
+    }
+
+    func testReminderClickWaitsForDashboardRefreshWithoutConsuming() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.writeUsage(expirySeconds: 800)
+        try await fixture.refresh()
+        try fixture.marker("delay-usage")
+        let refresh = Task { await fixture.monitor.refresh() }
+        while !fixture.monitor.isBusy { await Task.yield() }
+        await fixture.monitor.reviewExpiringCredit(accountKey: "account-a", creditID: "card-a")
+        await refresh.value
+        XCTAssertEqual(fixture.monitor.expiryReview?.creditID, "card-a")
+        XCTAssertTrue(try fixture.consumeRequests().isEmpty)
     }
 
     func testRefreshFailurePreservesLastUsageButBlocksResetUntilRecovery() async throws {

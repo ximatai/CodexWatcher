@@ -3,11 +3,12 @@ import AppKit
 
 struct ContentView: View {
     @Bindable var monitor: UsageMonitor
+    var handlesExpiryReminders = false
     var openDashboard: () -> Void = {}
     @AppStorage("appearance") private var appearance = AppAppearance.system.rawValue
 
     var body: some View {
-        DashboardContent(monitor: monitor, appearance: $appearance, openDashboard: openDashboard)
+        DashboardContent(monitor: monitor, appearance: $appearance, handlesExpiryReminders: handlesExpiryReminders, openDashboard: openDashboard)
             .onAppear { applyAppearance() }
             .onChange(of: appearance) { _, _ in applyAppearance() }
     }
@@ -24,9 +25,12 @@ private struct DashboardContent: View {
     @Bindable var monitor: UsageMonitor
     @Binding var appearance: String
     @AppStorage("privacyMode") private var privacyMode = false
+    let handlesExpiryReminders: Bool
     let openDashboard: () -> Void
     @State private var resetConfirmation: ResetConfirmation?
     @State private var showingMenuBarSettings = false
+    @State private var showingExpirySettings = false
+    @State private var pendingExpiryReview: CreditExpiryReview?
     private let loginItem = LoginItemController.shared
     private var format: PresentationFormat { PresentationFormat(locale: locale, timeZone: timeZone) }
     private var palette: AppPalette { AppPalette(dark: colorScheme == .dark) }
@@ -68,10 +72,21 @@ private struct DashboardContent: View {
             .foregroundStyle(.primary)
             .tint(palette.accent)
         }
-        .sheet(isPresented: $showingMenuBarSettings) {
+        .sheet(isPresented: $showingMenuBarSettings, onDismiss: showPendingExpiryReview) {
             MenuBarSettingsView(monitor: monitor)
         }
-        .sheet(item: $resetConfirmation) { confirmation in
+        .sheet(isPresented: $showingExpirySettings, onDismiss: showPendingExpiryReview) {
+            CreditExpirySettingsView(monitor: monitor)
+        }
+        .onChange(of: monitor.expiryReview, initial: true) { _, review in
+            guard handlesExpiryReminders, let review else { return }
+            pendingExpiryReview = review
+            if showingExpirySettings { showingExpirySettings = false }
+            else if showingMenuBarSettings { showingMenuBarSettings = false }
+            else if resetConfirmation != nil { resetConfirmation = nil }
+            else { showPendingExpiryReview() }
+        }
+        .sheet(item: $resetConfirmation, onDismiss: showPendingExpiryReview) { confirmation in
             ResetConfirmationView(monitor: monitor, confirmation: confirmation,
                 cancel: { resetConfirmation = nil },
                 confirm: {
@@ -83,6 +98,15 @@ private struct DashboardContent: View {
             Task { await monitor.refresh() }
         }
         .task { await monitor.refresh() }
+    }
+
+    private func showPendingExpiryReview() {
+        guard handlesExpiryReminders, let review = pendingExpiryReview else { return }
+        pendingExpiryReview = nil
+        guard let card = monitor.sortedCredits.first(where: { $0.id == review.creditID }),
+              let target = monitor.makeResetConfirmation(for: card),
+              target.accountKey == review.accountKey else { return }
+        resetConfirmation = target
     }
 
     private var separator: some View {
@@ -245,6 +269,10 @@ private struct DashboardContent: View {
                 Text(monitor.snapshot?.rateLimitResetCredits.map { "\(format.number(Double($0.availableCount))) 张可用" } ?? "信息未提供")
                     .font(.caption).foregroundStyle(.secondary)
             }
+            if let message = monitor.expiryHandlingMessage {
+                Text(message).font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             if monitor.pendingRedemption != nil {
                 statusMessage("上次重置结果尚未确认，请先核实。", symbol: "exclamationmark.circle", color: palette.warning)
                 Button("重试上次重置") {
@@ -331,6 +359,7 @@ private struct DashboardContent: View {
                 Spacer(minLength: 0)
                 Menu {
                     Button("状态栏显示…") { showingMenuBarSettings = true }
+                    Button("重置卡临期处理…") { showingExpirySettings = true }
                     Toggle(isOn: $privacyMode) { Label("隐藏邮箱", systemImage: "eye.slash") }
                     Picker("外观", selection: $appearance) {
                         ForEach(AppAppearance.allCases) { option in

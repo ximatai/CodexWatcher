@@ -54,7 +54,7 @@ bash scripts/generate-screenshots.sh
 
 ## 接入范围
 
-本应用通过本地 Codex App Server 的账号接口读取额度，并提供手动重置入口。账号凭证由 CLI 的系统钥匙串存储管理，应用不使用开发者自建后端。
+本应用通过本地 Codex App Server 的账号接口读取额度，并提供手动重置及明确授权后的临期自动使用入口。账号凭证由 CLI 的系统钥匙串存储管理，应用不使用开发者自建后端。
 
 截至 2026-10-21，[官方认证说明](https://learn.chatgpt.com/docs/app-server#auth-endpoints)允许已有本地或开源应用继续使用此认证，同时明确不允许将 App Server 认证用于商业或托管服务。官方建议迁移至 [Sign in with ChatGPT](https://developers.openai.com/siwc/quickstart)。
 
@@ -66,6 +66,7 @@ bash scripts/generate-screenshots.sh
 | --- | --- |
 | CLI 独立配置 | `~/Library/Application Support/CodexWatcher/Runtime`，与其他客户端隔离 |
 | 待确认重置 | 同级 `State/pending-resets.json`，保存账号标识、卡片 ID 和幂等键，不含密码或访问令牌 |
-| 应用偏好 | 本地 UserDefaults，保存外观、CLI 路径和显示选项等 |
+| 临期处理记录 | 同级 `State/expiry-actions.json`，保存账号与卡片组合的哈希标识及处理模式，跨重启和实例去重；不要作为缓存删除 |
+| 应用偏好 | 本地 UserDefaults，保存外观、CLI 路径、显示选项及绑定账号的临期处理配置等 |
 
 应用不记录原始协议、登录 URL 或令牌，并丢弃 CLI 标准错误；CLI 自身的状态及官方服务的处理行为不由应用控制。更多说明见 [安全与隐私](../SECURITY.md)。

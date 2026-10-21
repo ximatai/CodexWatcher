@@ -82,7 +82,16 @@ struct DocumentationPreview {
                          updated: format.date(Date(), timeOnly: true), blockingReason: nil, canConfirm: true,
                          cancel: {}, confirm: {}), size: NSSize(width: 370, height: 316), dark: false,
                          to: output.appendingPathComponent("reset-confirmation.png"))
-        print("Exported four previews with fictional data; no real account or reset was used.")
+        monitor.requestExpiryNotificationPermission = { true }
+        await monitor.configureExpiryHandling(.remind)
+        try await render(CreditExpirySettingsView(monitor: monitor).defaultAppStorage(defaults),
+                         size: NSSize(width: 380, height: 390), dark: false,
+                         to: output.appendingPathComponent("credit-expiry-reminder.png"))
+        await monitor.configureExpiryHandling(.automatic)
+        try await render(CreditExpirySettingsView(monitor: monitor).defaultAppStorage(defaults),
+                         size: NSSize(width: 380, height: 410), dark: true,
+                         to: output.appendingPathComponent("credit-expiry-automatic.png"))
+        print("Exported six previews with fictional data; no real account, notification permission or reset was used.")
     }
 
     @MainActor static func render<V: View>(_ view: V, size: NSSize, dark: Bool, to url: URL) async throws {

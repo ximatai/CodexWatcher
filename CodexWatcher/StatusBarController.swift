@@ -10,6 +10,7 @@ final class StatusBarController: NSObject {
     private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let popover = NSPopover()
     private var settingsWindow: NSWindow?
+    private var expirySettingsWindow: NSWindow?
     private var defaultsObserver: NSObjectProtocol?
     private var stopped = false
 
@@ -109,6 +110,7 @@ final class StatusBarController: NSObject {
             return entry
         }
         _ = add("状态栏显示…", #selector(showSettings))
+        _ = add("重置卡临期处理…", #selector(showExpirySettings))
         let hideEmail = add("隐藏邮箱", #selector(toggleEmailPrivacy))
         hideEmail.state = UserDefaults.standard.bool(forKey: "privacyMode") ? .on : .off
         hideEmail.image = NSImage(systemSymbolName: "eye.slash", accessibilityDescription: nil)
@@ -158,6 +160,22 @@ final class StatusBarController: NSObject {
         }
         NSApp.activate(ignoringOtherApps: true)
         settingsWindow?.makeKeyAndOrderFront(nil)
+    }
+
+    @objc private func showExpirySettings() {
+        if expirySettingsWindow == nil {
+            let hosting = NSHostingController(rootView: CreditExpirySettingsView(monitor: monitor,
+                onClose: { [weak self] in self?.expirySettingsWindow?.close() }))
+            hosting.sizingOptions = [.minSize, .maxSize]
+            let window = NSWindow(contentViewController: hosting)
+            window.title = "重置卡临期处理"
+            window.styleMask = [.titled, .closable]
+            window.isReleasedWhenClosed = false
+            window.center()
+            expirySettingsWindow = window
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        expirySettingsWindow?.makeKeyAndOrderFront(nil)
     }
 
     @objc private func showDashboard() { openDashboard() }

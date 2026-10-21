@@ -29,6 +29,8 @@ final class WatcherAppDelegate: NSObject, NSApplicationDelegate {
     private var clockTimer: Timer?
     private var statusController: StatusBarController?
     private var dashboard: NSWindow?
+    private var expiryNotifications: CreditExpiryNotifications?
+    private var wakeObserver: NSObjectProtocol?
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         if Self.smokeRoot != nil {
@@ -53,6 +55,23 @@ final class WatcherAppDelegate: NSObject, NSApplicationDelegate {
         if let root = Self.smokeRoot {
             Task { await runReleaseSmokeTest(root: root) }
         } else {
+            let notifications = CreditExpiryNotifications { [weak self] owner, creditID in
+                self?.showDashboard()
+                Task { await self?.monitor.reviewExpiringCredit(accountKey: owner, creditID: creditID) }
+            }
+            expiryNotifications = notifications
+            monitor.requestExpiryNotificationPermission = { [weak notifications] in
+                await notifications?.requestPermission() ?? false
+            }
+            monitor.deliverExpiryReminder = { [weak notifications] reminder in
+                guard let notifications else { throw WatcherError.message("通知不可用。") }
+                try await notifications.deliver(reminder)
+            }
+            monitor.clearExpiryNotifications = { [weak notifications] in notifications?.clear() }
+            wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+                forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
+                Task { @MainActor in await self?.monitor.processExpiringCredits() }
+            }
             Task { await monitor.start() }
         }
     }
@@ -92,9 +111,8 @@ final class WatcherAppDelegate: NSObject, NSApplicationDelegate {
     private func showDashboard() {
         statusController?.closePopover()
         if dashboard == nil {
-            let hosting = NSHostingController(rootView: ContentView(monitor: monitor) { [weak self] in
-                self?.showDashboard()
-            })
+            let hosting = NSHostingController(rootView: ContentView(monitor: monitor,
+                handlesExpiryReminders: true, openDashboard: { [weak self] in self?.showDashboard() }))
             hosting.sizingOptions = [.minSize, .maxSize]
             let window = NSWindow(contentViewController: hosting)
             window.title = "Codex Watcher"
@@ -110,6 +128,7 @@ final class WatcherAppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         clockTimer?.invalidate()
+        if let wakeObserver { NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver) }
         statusController?.stop()
         monitor.shutdown()
     }

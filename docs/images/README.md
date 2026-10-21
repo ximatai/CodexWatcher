@@ -10,6 +10,8 @@
 | [dashboard-dark.png](dashboard-dark.png) | 暗色面板 |
 | [menu-bar-settings.png](menu-bar-settings.png) | 状态栏设置与数值预览 |
 | [reset-confirmation.png](reset-confirmation.png) | 重置确认页 |
+| [credit-expiry-reminder.png](credit-expiry-reminder.png) | 临期处理的提醒模式 |
+| [credit-expiry-automatic.png](credit-expiry-automatic.png) | 临期处理的自动模式 |
 
 ## 重新生成
 
@@ -19,6 +21,6 @@
 bash scripts/generate-screenshots.sh
 ```
 
-需要 Xcode 工具链，不需要 Codex CLI 或账号。脚本编译独立文档预览程序，使用临时 Runtime 和独立偏好；假服务仅响应初始化及读取，拒绝其他方法。确认页按钮为空操作。退出后清理临时程序、数据和偏好，不影响正式应用。
+需要 Xcode 工具链，不需要 Codex CLI 或账号。脚本编译独立文档预览程序，使用临时 Runtime 和独立偏好；假服务仅响应初始化及读取，拒绝其他方法。确认页按钮为空操作；临期配置仅操作演示偏好，通知权限由假回调提供，不发送系统通知、不启动定时检查。退出后清理临时程序、数据和偏好，不影响正式应用。
 
 预览按 2× 分辨率导出，使用简体中文和 Asia/Shanghai 时区；正式应用仍遵从用户地区设置。图片不含系统菜单栏、桌面或真实账号截图。界面改变后应重新生成并逐张检查排版。

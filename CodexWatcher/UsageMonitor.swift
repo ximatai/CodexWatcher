@@ -20,6 +20,19 @@ final class UsageMonitor {
     var selectedWindowID: String? {
         didSet { defaults.set(selectedWindowID, forKey: "selectedWindowID") }
     }
+    private(set) var expiryConfiguration: CreditExpiryConfiguration
+    private(set) var expiryHandlingMessage: String?
+    private(set) var isConfiguringExpiry = false
+    private(set) var expiryReview: CreditExpiryReview?
+    @ObservationIgnored var requestExpiryNotificationPermission: (() async -> Bool)?
+    @ObservationIgnored var deliverExpiryReminder: ((CreditExpiryReminder) async throws -> Void)?
+    @ObservationIgnored var clearExpiryNotifications: (() -> Void)?
+    @ObservationIgnored private let expiryStore: CreditExpiryActionStore
+    @ObservationIgnored private var expiryTask: Task<Void, Never>?
+    @ObservationIgnored private var isCheckingExpiry = false
+    @ObservationIgnored private var expiryChecksStopped = false
+    private static let expiryPreferenceKey = "creditExpiryConfiguration"
+
     private(set) var executablePath: String
     @ObservationIgnored private let client: AppServerClient
     @ObservationIgnored private let resetStore: ResetAttemptStore
@@ -31,12 +44,15 @@ final class UsageMonitor {
 
     init(client suppliedClient: AppServerClient? = nil, defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        expiryConfiguration = Self.readExpiryConfiguration(defaults)
         let path = defaults.string(forKey: "codexExecutablePath")
             ?? AppServerClient.defaultExecutablePath
         client = suppliedClient ?? AppServerClient(executablePath: path)
         executablePath = client.executablePath
         selectedWindowID = defaults.string(forKey: "selectedWindowID")
         resetStore = ResetAttemptStore(directory: client.runtimeDirectory.deletingLastPathComponent()
+            .appendingPathComponent("State", isDirectory: true))
+        expiryStore = CreditExpiryActionStore(directory: client.runtimeDirectory.deletingLastPathComponent()
             .appendingPathComponent("State", isDirectory: true))
         client.onNotification = { [weak self] method, params in
             self?.handleNotification(method, params: params)
@@ -115,6 +131,13 @@ final class UsageMonitor {
         guard !started else { return }
         started = true
         await refresh()
+        expiryTask = Task { @MainActor [weak self] in
+            await self?.processExpiringCredits()
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(30)) } catch { break }
+                await self?.processExpiringCredits()
+            }
+        }
         pollTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .seconds(300)) } catch { break }
@@ -124,6 +147,8 @@ final class UsageMonitor {
     }
 
     func shutdown() {
+        expiryChecksStopped = true
+        expiryTask?.cancel()
         pollTask?.cancel()
         notificationTask?.cancel()
         loginTimeout?.cancel()
@@ -217,7 +242,8 @@ final class UsageMonitor {
     }
 
     /// Persist before sending; unknown outcomes are retried with the same key, even after restart.
-    func redeem(_ confirmation: ResetConfirmation) async {
+    func redeem(_ confirmation: ResetConfirmation, automatically: Bool = false) async {
+        if automatically && !automaticExpiryAllowed(confirmation, at: .now) { return }
         guard isResetConfirmationCurrent(confirmation) else {
             notice = "操作已变化，请重新打开确认页。"
             return
@@ -234,6 +260,12 @@ final class UsageMonitor {
             guard isResetConfirmationCurrent(confirmation) else {
                 notice = "操作已变化，请重新打开确认页。"
                 return
+            }
+            if automatically {
+                guard automaticExpiryAllowed(confirmation, at: .now),
+                      let expiry = sortedCredits.first(where: { $0.id == confirmation.creditID })?.expiryDate else { return }
+                let reminder = CreditExpiryReminder(accountKey: storageKey, creditID: confirmation.creditID, expiresAt: expiry)
+                guard try expiryStore.claim(reminder, mode: .automatic) else { return }
             }
             let attempt: PendingRedemption
             if let confirmedAttempt = confirmation.retry {
@@ -270,6 +302,145 @@ final class UsageMonitor {
             errorMessage = pendingRedemption == nil ? error.localizedDescription
                 : "尚未确认重置结果。可重试原重置操作；若此前尚未完成，可能消耗 1 张卡。同一请求标识用于避免重复消费，操作无法撤销。"
         }
+    }
+
+    private static func readExpiryConfiguration(_ defaults: UserDefaults) -> CreditExpiryConfiguration {
+        guard let data = defaults.data(forKey: expiryPreferenceKey),
+              let config = try? JSONDecoder().decode(CreditExpiryConfiguration.self, from: data) else {
+            return CreditExpiryConfiguration()
+        }
+        return config
+    }
+
+    var expiryConfigurationMatchesAccount: Bool {
+        account?.type == "chatgpt" && redemptionStorageKey != nil
+            && expiryConfiguration.accountKey == redemptionStorageKey
+    }
+
+    func configureExpiryHandling(_ mode: CreditExpiryMode) async {
+        guard !isConfiguringExpiry else { return }
+        isConfiguringExpiry = true
+        defer { isConfiguringExpiry = false }
+        expiryHandlingMessage = nil
+        let owner = redemptionStorageKey
+        if mode != .off {
+            guard account?.type == "chatgpt", let owner, !isBusy, loginID == nil else {
+                expiryHandlingMessage = "请先连接账号并刷新用量，再开启临期处理。"
+                return
+            }
+            if mode == .automatic && snapshot?.accountId?.isEmpty != false {
+                expiryHandlingMessage = "服务端未提供稳定账号标识，无法开启自动使用。"
+                return
+            }
+            if mode == .remind {
+                // Switching away from automatic must stop writes even if permission is denied.
+                let off = CreditExpiryConfiguration()
+                if expiryConfiguration.mode == .automatic,
+                   let data = try? JSONEncoder().encode(off) {
+                    defaults.set(data, forKey: Self.expiryPreferenceKey)
+                    expiryConfiguration = off
+                }
+                guard await requestExpiryNotificationPermission?() == true else {
+                    expiryHandlingMessage = "未获得通知权限。请在系统设置中允许 Codex Watcher 通知后重试。"
+                    return
+                }
+            }
+            guard owner == redemptionStorageKey, account?.type == "chatgpt", loginID == nil else {
+                expiryHandlingMessage = "账号已变化，请重新设置。"
+                return
+            }
+        }
+        let config = CreditExpiryConfiguration(mode: mode, accountKey: mode == .off ? nil : owner)
+        do {
+            defaults.set(try JSONEncoder().encode(config), forKey: Self.expiryPreferenceKey)
+            expiryConfiguration = config
+            expiryReview = nil
+            clearExpiryNotifications?()
+        } catch { expiryHandlingMessage = "无法保存临期处理设置。" }
+    }
+
+    private func automaticExpiryAllowed(_ confirmation: ResetConfirmation, at date: Date) -> Bool {
+        expiryConfiguration = Self.readExpiryConfiguration(defaults)
+        guard !expiryChecksStopped, !isConfiguringExpiry, expiryConfiguration.mode == .automatic,
+              expiryConfigurationMatchesAccount, snapshot?.accountId?.isEmpty == false,
+              confirmation.accountKey == redemptionStorageKey,
+              confirmation.retry == nil, pendingRedemption == nil, loginID == nil,
+              let credit = sortedCredits.first(where: { $0.id == confirmation.creditID }) else { return false }
+        return CreditExpiryPolicy.candidate(in: [credit], at: date) != nil
+    }
+
+    /// A 30-second awake-time check; always refresh from the server before deciding.
+    /// Never automatically retries an unresolved write or adopts a prior request key.
+    func processExpiringCredits() async {
+        expiryConfiguration = Self.readExpiryConfiguration(defaults)
+        guard !expiryChecksStopped, !isCheckingExpiry, !isConfiguringExpiry, !isBusy, loginID == nil,
+              expiryConfiguration.mode != .off else { return }
+        isCheckingExpiry = true
+        defer { isCheckingExpiry = false }
+        await refresh()
+        expiryConfiguration = Self.readExpiryConfiguration(defaults)
+        let mode = expiryConfiguration.mode
+        guard !expiryChecksStopped, !isConfiguringExpiry, mode != .off, expiryConfigurationMatchesAccount,
+              !isBusy, loginID == nil, !isStale(at: .now), pendingRedemption == nil,
+              let owner = redemptionStorageKey else { return }
+        do {
+            // Filter handled cards before selection, so the next card can be checked later.
+            let unhandled = try sortedCredits.filter { credit in
+                guard let expiry = credit.expiryDate else { return false }
+                return try !expiryStore.contains(CreditExpiryReminder(accountKey: owner,
+                    creditID: credit.id, expiresAt: expiry), mode: mode)
+            }
+            guard let card = CreditExpiryPolicy.candidate(in: unhandled, at: .now),
+                  let expiry = card.expiryDate else { return }
+            let reminder = CreditExpiryReminder(accountKey: owner, creditID: card.id, expiresAt: expiry)
+            if mode == .automatic {
+                guard let confirmation = makeResetConfirmation(for: card) else { return }
+                await redeem(confirmation, automatically: true)
+                if pendingRedemption != nil {
+                    expiryHandlingMessage = "自动使用结果未确认，已暂停后续自动操作。请在面板核实原请求。"
+                } else if let errorMessage { expiryHandlingMessage = errorMessage }
+                else { expiryHandlingMessage = notice }
+            } else {
+                guard let deliverExpiryReminder else {
+                    expiryHandlingMessage = "通知暂不可用，请重新开启提醒模式。"
+                    return
+                }
+                guard try expiryStore.claim(reminder, mode: .remind) else { return }
+                do {
+                    try await deliverExpiryReminder(reminder)
+                    expiryConfiguration = Self.readExpiryConfiguration(defaults)
+                    guard !expiryChecksStopped, expiryConfiguration.mode == .remind,
+                          expiryConfigurationMatchesAccount, owner == redemptionStorageKey else {
+                        clearExpiryNotifications?()
+                        return
+                    }
+                    expiryHandlingMessage = "已发送临期提醒，确认后才会使用卡片。"
+                } catch {
+                    try expiryStore.releaseReminder(reminder)
+                    expiryHandlingMessage = "临期通知未发送，请检查系统通知权限。"
+                }
+            }
+        } catch { expiryHandlingMessage = "临期处理记录不可用，已跳过操作。请检查本地状态文件。" }
+    }
+
+    func reviewExpiringCredit(accountKey: String, creditID: String) async {
+        // The newly opened dashboard may already be refreshing; wait for its read.
+        let deadline = Date().addingTimeInterval(30)
+        while isBusy && Date() < deadline {
+            do { try await Task.sleep(for: .milliseconds(100)) } catch { return }
+        }
+        guard !isBusy else {
+            expiryHandlingMessage = "正在更新，请稍后在面板查看重置卡。"
+            return
+        }
+        await refresh()
+        guard accountKey == redemptionStorageKey, !isStale(at: .now),
+              let card = sortedCredits.first(where: { $0.id == creditID }),
+              makeResetConfirmation(for: card) != nil else {
+            expiryHandlingMessage = "提醒对应的账号或卡片已变化，请在面板重新查看。"
+            return
+        }
+        expiryReview = CreditExpiryReview(accountKey: accountKey, creditID: creditID)
     }
 
     func chooseExecutable() async {
