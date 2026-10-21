@@ -31,7 +31,7 @@ A native macOS menu bar app for monitoring Codex plan usage, quota pace, and ear
 安装 CLI 请参照 [OpenAI Codex 官方文档](https://learn.chatgpt.com/docs/app-server)。应用不会下载或捆绑 CLI。
 
 ```sh
-git clone https://github.com/aruis/CodexWatcher.git
+git clone https://github.com/ximatai/CodexWatcher.git
 cd CodexWatcher
 open CodexWatcher.xcodeproj
 ```
