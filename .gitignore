@@ -1,0 +1,17 @@
+.build/
+.swiftpm/
+DerivedData/
+.DS_Store
+xcuserdata/
+*.xcuserstate
+build/
+work/
+outputs/
+*.xcarchive
+*.dmg
+.env
+.env.*
+auth.json
+pending-resets.json
+*.log
+Local.xcconfig

@@ -1,0 +1,62 @@
+import Foundation
+import Darwin
+
+/// An atomic disk write must complete before an irreversible redemption is sent.
+final class ResetAttemptStore {
+    private let file: URL
+
+    init(directory: URL) {
+        file = directory.appendingPathComponent("pending-resets.json")
+    }
+
+    func pending(for owner: String) throws -> PendingRedemption? {
+        try withLock { try all()[owner] }
+    }
+
+    func prepare(creditID: String, owner: String) throws -> PendingRedemption {
+        try withLock {
+            var entries = try all()
+            if let existing = entries[owner] { return existing }
+            let attempt = PendingRedemption(creditID: creditID, idempotencyKey: UUID().uuidString)
+            entries[owner] = attempt
+            try write(entries)
+            return attempt
+        }
+    }
+
+    func clear(owner: String, idempotencyKey: String) throws {
+        try withLock {
+            var entries = try all()
+            // A late result from another instance must not erase a newer operation.
+            guard entries[owner]?.idempotencyKey == idempotencyKey else { return }
+            entries.removeValue(forKey: owner)
+            try write(entries)
+        }
+    }
+
+    private func withLock<T>(_ body: () throws -> T) throws -> T {
+        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(),
+                                               withIntermediateDirectories: true,
+                                               attributes: [.posixPermissions: 0o700])
+        let lockFile = file.deletingLastPathComponent().appendingPathComponent("pending-resets.lock")
+        let descriptor = open(lockFile.path, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR)
+        guard descriptor >= 0 else { throw POSIXError(.EIO) }
+        defer { close(descriptor) }
+        guard flock(descriptor, LOCK_EX) == 0 else { throw POSIXError(.EIO) }
+        defer { _ = flock(descriptor, LOCK_UN) }
+        return try body()
+    }
+
+    private func all() throws -> [String: PendingRedemption] {
+        guard FileManager.default.fileExists(atPath: file.path) else { return [:] }
+        return try JSONDecoder().decode([String: PendingRedemption].self, from: Data(contentsOf: file))
+    }
+
+    private func write(_ entries: [String: PendingRedemption]) throws {
+        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(),
+                                               withIntermediateDirectories: true,
+                                               attributes: [.posixPermissions: 0o700])
+        try JSONEncoder().encode(entries).write(to: file, options: .atomic)
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+    }
+}

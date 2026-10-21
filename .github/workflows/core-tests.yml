@@ -1,0 +1,19 @@
+name: Core tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-tests:
+    runs-on: macos-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Show Swift toolchain
+        run: swift --version
+      - name: Run offline tests (no account or reset calls)
+        run: swift test

@@ -1,0 +1,16 @@
+// swift-tools-version: 6.0
+import PackageDescription
+
+let package = Package(
+    name: "CodexWatcherCore",
+    defaultLocalization: "en",
+    platforms: [.macOS(.v14)],
+    targets: [
+        .target(name: "WatcherCore", path: "CodexWatcher",
+                exclude: ["MyApp.swift", "ContentView.swift", "UsageMonitor.swift", "Assets.xcassets"],
+                sources: ["UsageModels.swift", "AppServerClient.swift", "ResetAttemptStore.swift", "PresentationFormat.swift"],
+                resources: [.process("en.lproj"), .process("zh-Hans.lproj")]),
+        .testTarget(name: "WatcherCoreTests", dependencies: ["WatcherCore"], path: "Tests")
+    ],
+    swiftLanguageModes: [.v5]
+)
