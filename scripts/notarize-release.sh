@@ -79,4 +79,4 @@ codesign --verify --strict "$output/$archive_name.dmg"
   cd "$output"
   shasum -a 256 "$archive_name.dmg" "$archive_name.zip" > SHA256SUMS.txt
 )
-echo 'Signed, notarized and stapled DMG/ZIP are ready for a draft release.'
+echo 'Signed, notarized and stapled DMG/ZIP are ready for final package verification.'

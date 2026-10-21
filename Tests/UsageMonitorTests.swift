@@ -27,7 +27,12 @@ final class UsageMonitorTests: XCTestCase {
               case "$line" in
                 *initialized*) continue ;;
                 *initialize*) result='{}' ;;
-                *account*rateLimits*read*) result=$(/bin/cat "$fixture_dir/usage.json") ;;
+                *account*rateLimits*read*)
+                  if [ -f "$fixture_dir/reject-usage" ]; then
+                    printf '{"id":%s,"error":{"code":-32000}}\n' "$id"
+                    continue
+                  fi
+                  result=$(/bin/cat "$fixture_dir/usage.json") ;;
                 *account*read*) result=$(/bin/cat "$fixture_dir/account.json") ;;
                 *account*logout*)
                   if [ -f "$fixture_dir/reject-logout" ]; then
@@ -98,6 +103,79 @@ final class UsageMonitorTests: XCTestCase {
             defaults.removePersistentDomain(forName: suite)
             try? FileManager.default.removeItem(at: directory)
         }
+    }
+
+    func testRefreshFailurePreservesLastUsageButBlocksResetUntilRecovery() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try await fixture.refresh()
+        let card = try XCTUnwrap(fixture.monitor.sortedCredits.first)
+        let confirmation = try XCTUnwrap(fixture.monitor.makeResetConfirmation(for: card))
+        try fixture.marker("reject-usage")
+        await fixture.monitor.refresh()
+        XCTAssertNotNil(fixture.monitor.snapshot)
+        XCTAssertTrue(fixture.monitor.isStale(at: .now))
+        XCTAssertFalse(fixture.monitor.canConfirmRedemption(confirmation, at: .now))
+        await fixture.monitor.redeem(confirmation)
+        XCTAssertTrue(try fixture.consumeRequests().isEmpty)
+        try fixture.removeMarker("reject-usage")
+        try await fixture.refresh()
+        XCTAssertNil(fixture.monitor.errorMessage)
+        XCTAssertFalse(fixture.monitor.isStale(at: .now))
+        XCTAssertTrue(fixture.monitor.canConfirmRedemption(confirmation, at: .now))
+    }
+
+    func testLoggedOutAndChangedAccountClearPreviousUsageAndPendingOperation() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        _ = try fixture.store.prepare(creditID: "card-a", owner: "account-a")
+        try await fixture.refresh()
+        XCTAssertNotNil(fixture.monitor.pendingRedemption)
+        try fixture.write(["account": NSNull()], to: "account.json")
+        await fixture.monitor.refresh()
+        XCTAssertNil(fixture.monitor.account)
+        XCTAssertNil(fixture.monitor.snapshot)
+        XCTAssertNil(fixture.monitor.pendingRedemption)
+        try fixture.writeAccount("account-b")
+        try fixture.writeUsage(owner: "account-b")
+        try await fixture.refresh()
+        XCTAssertEqual(fixture.monitor.account?.email, "account-b@example.invalid")
+        XCTAssertNil(fixture.monitor.pendingRedemption)
+        XCTAssertNotNil(try fixture.store.pending(for: "account-a"), "Logout must retain unresolved requests")
+        XCTAssertTrue(try fixture.consumeRequests().isEmpty)
+    }
+
+    func testOpeningAndCancellingConfirmationDoesNotConsumeOrPersist() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try await fixture.refresh()
+        let card = try XCTUnwrap(fixture.monitor.sortedCredits.first)
+        for _ in 0..<3 {
+            XCTAssertNotNil(fixture.monitor.makeResetConfirmation(for: card))
+        }
+        // Cancellation dismisses the view without calling redeem.
+        XCTAssertTrue(try fixture.consumeRequests().isEmpty)
+        XCTAssertNil(try fixture.store.pending(for: "account-a"))
+    }
+
+    func testDoubleClickWhileConsumptionIsPendingSendsOnlyOneRequest() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try await fixture.refresh()
+        let card = try XCTUnwrap(fixture.monitor.sortedCredits.first)
+        let confirmation = try XCTUnwrap(fixture.monitor.makeResetConfirmation(for: card))
+        try fixture.marker("hang-consume")
+        let first = Task { await fixture.monitor.redeem(confirmation) }
+        // Wait for the fake server to observe the actual consume request.
+        for _ in 0..<100 {
+            if !(try fixture.consumeRequests()).isEmpty { break }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        XCTAssertTrue(fixture.monitor.isBusy)
+        await fixture.monitor.redeem(confirmation)
+        await first.value
+        XCTAssertEqual(try fixture.consumeRequests().count, 1)
+        XCTAssertNotNil(fixture.monitor.pendingRedemption)
     }
 
     func testLogoutReconnectsAndOnlyClearsAccountAfterSuccess() async throws {

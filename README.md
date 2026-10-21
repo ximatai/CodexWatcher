@@ -6,7 +6,7 @@
 
 A native macOS menu bar app for tracking Codex usage, quota pace, and reset cards.
 
-> 独立第三方开源项目，与 OpenAI 无隶属关系。目前为预览版，正式安装包尚未公开发布；真实重置操作未验收。
+> 独立第三方开源项目，与 OpenAI 无隶属关系。目前为预览版；真实重置操作未验收。
 
 ## 界面预览
 
@@ -27,6 +27,10 @@ A native macOS menu bar app for tracking Codex usage, quota pace, and reset card
 - 可隐藏邮箱；凭证由本机 Codex CLI 的系统钥匙串存储管理。
 
 每 5 分钟读取用量，打开面板及系统唤醒等事件也会触发刷新。应用不发起模型推理、不读取聊天内容，也不使用开发者自建后端。
+
+## 安装
+
+从 [GitHub Releases](https://github.com/ximatai/CodexWatcher/releases/latest) 下载 DMG，将应用拖入 Applications。支持 macOS 14+、Apple Silicon 和 Intel；应用已签名、公证，仍需单独安装 Codex CLI。Intel 尚未经真机验证。
 
 ## 从源码运行
 
@@ -56,7 +60,7 @@ open CodexWatcher.xcodeproj
 
 - [使用指南](docs/USAGE.md)：用量口径、设置、重置确认与重试。
 - [开发与接入](docs/DEVELOPMENT.md)：构建、测试、依赖及认证适用范围。
-- [发布流程](docs/RELEASING.md)：CI 签名、公证、打包及 Release 草稿。
+- [发布流程](docs/RELEASING.md)：打 tag 后自动测试、签名、公证及发布。
 - [图标素材](docs/design/README.md)：1024 方形原稿、macOS 图标及生成方式。
 - [界面预览素材](docs/images/README.md)：演示数据与重新生成方式。
 - [贡献指南](CONTRIBUTING.md) · [架构](docs/ARCHITECTURE.md) · [安全与隐私](SECURITY.md) · [更新记录](CHANGELOG.md)

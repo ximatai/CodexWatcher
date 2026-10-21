@@ -2,9 +2,9 @@
 
 [返回 README](../README.md) · [开发与接入](DEVELOPMENT.md)
 
-GitHub Actions 负责构建 Universal 应用、Developer ID 签名、Apple 公证、生成 DMG/ZIP 及 Release 草稿。不需要自建下载服务器；正式发布由维护者验收后操作。
+推送版本标签后，GitHub Actions 自动测试、构建 Universal 应用、完成 Developer ID 签名与 Apple 公证、检查最终 DMG/ZIP，并公开发布 Release。没有人工验收步骤，不需要自建下载服务器。
 
-2026-10-21，`v0.2.0` 已通过[首次完整发布工作流](https://github.com/ximatai/CodexWatcher/actions/runs/39575378778)，生成签名、公证后的 DMG、ZIP 和校验文件，当前保留为 Release 草稿。本机已核对 SHA-256、应用和 DMG 签名、公证票据及应用 Gatekeeper 检查；安装后的功能验收与正式公开发布仍需维护者完成。普通 CI 的无签名构建不能作为正式安装包。
+`v0.2.0` 已[正式发布](https://github.com/ximatai/CodexWatcher/releases/tag/v0.2.0)，DMG 已完成本地安装与运行验收。后续版本采用以下自动门禁；自动检查不等于所有系统、硬件和真实服务场景均已验证。
 
 ## 一次性准备
 
@@ -52,6 +52,51 @@ base64 -i AuthKey_EXAMPLE.p8 | pbcopy
 
 建议限制 `release` 环境仅允许 `main` 分支及受控的 `v*` 标签，并按团队需要配置审批。发布凭据只在凭据检查及签名步骤中注入，不提供给普通 PR 工作流。工作流将证书导入临时钥匙串，结束时删除钥匙串和临时私钥文件。[GitHub 官方签名指南](https://docs.github.com/en/actions/how-tos/deploy/deploy-to-third-party-platforms/sign-xcode-applications)
 
+## 自动发布
+
+先将改动合入并推送至 `main`，再创建一个未使用过的版本标签：
+
+```sh
+git tag v0.2.1
+git push origin v0.2.1
+```
+
+- `v0.2.1`：公开正式版，并设为 Latest。
+- `v0.3.0-beta.1`：公开预发布版，不取代 Latest。
+- Actions → Release → Run workflow：在 `main` 上手动运行仍只生成草稿，便于排查；勾选 `verify_only` 则只验证，不创建 Release。正常发版无需手动运行。
+
+仅接受版本标签；标签提交必须属于 `main` 历史。任何门禁失败都会阻止公开发布；文件先上传到草稿，全部上传成功后才公开。已发布版本不会覆盖，修复应使用新版本号。手动创建的草稿在标签尚未落地时，必须继续对应原提交。
+
+发布环境不能设置必需人工审批，否则标签发布仍会等待审批。应限制为 `main` 和受控 `v*` 标签，并限制有权推送这些标签的维护者。
+
+工作流使用具备公证权限的 **App Store Connect 团队 API 密钥**，需要 `.p8` 私钥、Key ID 和 Issuer ID。它用于 Apple 公证，不会将应用提交到 Mac App Store。个人 API 密钥的参数形式不同，当前脚本未使用该方式。
+
+另外准备签名证书所属团队的 Team ID。不要把个人开发身份括号中的 ID 直接当作 Team ID。
+
+### 3. GitHub Secrets
+
+仓库 Settings → Environments 中创建 `release` 环境，并设置以下 Secrets。仓库或组织级同名 Secrets 也可以使用；环境级配置便于独立控制发布权限。
+
+| Secret | 内容 |
+| --- | --- |
+| `MACOS_CERTIFICATE_P12_BASE64` | 含证书及私钥的 P12，Base64 编码 |
+| `MACOS_CERTIFICATE_PASSWORD` | P12 导出密码 |
+| `APPLE_TEAM_ID` | 签名证书所属团队的 Team ID |
+| `NOTARY_KEY_P8_BASE64` | 团队公证 API 私钥 P8，Base64 编码 |
+| `NOTARY_KEY_ID` | 对应 Key ID |
+| `NOTARY_ISSUER_ID` | 对应 Issuer ID |
+
+例如在本机将编码结果复制到剪贴板，再粘贴到 Secret 输入框：
+
+```sh
+base64 -i DeveloperID.p12 | pbcopy
+base64 -i AuthKey_EXAMPLE.p8 | pbcopy
+```
+
+每次只执行一条并保存对应 Secret，避免后一次覆盖剪贴板。Base64 不是加密；不要把结果、证书、私钥或密码发到 Issue、聊天、日志或 Git 仓库。
+
+建议限制 `release` 环境仅允许 `main` 分支及受控的 `v*` 标签，并按团队需要配置审批。发布凭据只在凭据检查及签名步骤中注入，不提供给普通 PR 工作流。工作流将证书导入临时钥匙串，结束时删除钥匙串和临时私钥文件。[GitHub 官方签名指南](https://docs.github.com/en/actions/how-tos/deploy/deploy-to-third-party-platforms/sign-xcode-applications)
+
 ## 触发草稿
 
 将改动合入并推送至 `main` 后，可二选一：
@@ -68,19 +113,21 @@ base64 -i AuthKey_EXAMPLE.p8 | pbcopy
 3. 验证唯一的 Developer ID Application 身份与 Team ID，启用 Hardened Runtime 和安全时间戳签名。
 4. 公证并附加应用票据，验证签名、票据及 Gatekeeper，再生成 ZIP 与拖拽安装的 DMG。
 5. 对 DMG 再签名、公证和附加票据，生成 SHA-256 校验文件。
-6. 上传三份文件到 Release **草稿**，不自动公开发布。
+6. 挂载最终 DMG、解压 ZIP，分别核对校验值、版本、架构、签名团队、签名、公证票据和 Gatekeeper，并检查 DMG 的 Applications 链接。
+7. 分别启动两个安装包中的应用，在隔离的本地假服务下验证额度读取、主窗口、状态栏和亮暗色切换，要求应用正常退出。假服务拒绝所有写操作，不启动真实 CLI、不读取真实账号、不注册登录项。
+8. 上传 DMG、ZIP、SHA256SUMS.txt；标签触发时自动公开，手动运行时保留草稿。
 
 应用版本采用标签中的数字部分，构建号采用 GitHub run number。预发布标签如 `v0.2.0-beta.1` 的应用版本为 `0.2.0`，Release 则保留完整标签并标记预发布。
 
 公证每次最多等待 30 分钟；超时或拒绝即停止，不能跳过公证发布。超时不取消 Apple 服务端处理，作业日志中的失败信息和提交结果可用于后续核实。[Apple 公证流程](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution)
 
-## 发布前验收
+## 验证边界与故障处理
 
-从草稿下载 DMG，检查签名、公证和安装，再验证登录、用量、亮暗色、状态栏设置及登录启动。Universal 编译不等于 Intel 真机验收；发布说明应如实注明硬件验证范围。
+自动启动检查验证应用内部状态及正常退出，不能替代视觉质量检查、真实登录和令牌长期刷新、跨登录启动或 Intel 真机测试。Universal 编译不等于 Intel 真机验收。界面细节和个别系统兼容性问题可能随版本发布，通过补丁版本修复；账号串用、误消费和凭据泄露属于阻断问题。
 
-应用仍需要用户单独安装 Codex CLI，不捆绑、不自动下载 CLI。不要宣传为完全无依赖；安装说明和 Release 说明需保留此前提。真实重置尚未验收，测试过程中不消费真实卡片。
+应用仍需要单独安装 Codex CLI，不捆绑、不自动下载。真实重置尚未验收，测试不消费真实卡片。发布说明保留这些边界。
 
-确认后在 GitHub Releases 中人工发布草稿。不要将 GitHub 自动生成的 Source code ZIP 当作应用安装包。
+失败时查看 Actions 日志，修复后重新运行未发布版本；如果已经公开，则发布新补丁版本，不移动旧标签或覆盖旧文件。严重问题可撤下有问题的安装包，并引导用户使用上一稳定版本。不要将 Source code ZIP 当作应用安装包。
 
 ## 本地验证
 
@@ -91,3 +138,11 @@ bash scripts/build-release.sh v0.2.0 dist
 ```
 
 输出目录须为新目录或不含同名应用。生成的 `.app` 仍未签名、公证，不用于公开分发。`scripts/notarize-release.sh` 使用与 CI 相同的六项环境变量；仅在已准备正式凭据、确需提交 Apple 公证时运行。它不会登录 ChatGPT 或触发重置卡。
+
+对已签名、公证的产物运行最终验证（需要可用的 macOS 图形会话）：
+
+```sh
+APPLE_TEAM_ID=YOURTEAMID bash scripts/verify-release.sh v0.2.1 dist
+```
+
+仅验证隔离启动可运行 `python3 scripts/smoke-test-app.py /path/to/CodexWatcher.app`。冒烟模式必须同时提供专用参数与临时假服务目录，缺少夹具即失败，不回退到真实 CLI。

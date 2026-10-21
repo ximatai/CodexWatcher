@@ -1,4 +1,4 @@
-name: Release draft
+name: Release
 
 on:
   push:
@@ -9,6 +9,10 @@ on:
         description: 'Version tag, e.g. v0.2.0 or v0.2.0-beta.1'
         required: true
         type: string
+      verify_only:
+        description: 'Verify signed packages without creating a release'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -72,7 +76,12 @@ jobs:
           NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
           NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
         run: bash scripts/notarize-release.sh "$RELEASE_TAG" "$RUNNER_TEMP/distribution"
+      - name: Verify final packages and isolated startup
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: bash scripts/verify-release.sh "$RELEASE_TAG" "$RUNNER_TEMP/distribution"
       - name: Create or update draft release
+        if: ${{ !inputs.verify_only }}
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -89,7 +98,7 @@ jobs:
           - Third-party project, not affiliated with OpenAI. Available fields depend on your account.
           - Real reset consumption has not been validated. Reset actions consume cards and cannot be undone.
 
-          发布前请验收安装、登录、用量显示及登录启动；不要消费真实重置卡。
+          CI 已验证安装包完整性、签名、公证及隔离启动；不使用真实账号或消费重置卡。
           Intel 二进制已构建，但仍需 Intel 设备实测。详细变更见仓库 CHANGELOG.md。
           NOTES
           assets=("$output/CodexWatcher-$RELEASE_TAG-universal.dmg" "$output/CodexWatcher-$RELEASE_TAG-universal.zip" "$output/SHA256SUMS.txt")
@@ -105,4 +114,16 @@ jobs:
             if [[ "$RELEASE_TAG" == *-* ]]; then flags+=(--prerelease); fi
             gh release create "$RELEASE_TAG" "${assets[@]}" --draft "${flags[@]}" \
               --target "$(git rev-parse HEAD)" --title "CodexWatcher $RELEASE_TAG" --notes-file "$RUNNER_TEMP/release-notes.md"
+          fi
+      - name: Publish tagged release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          if [[ "$RELEASE_TAG" == *-* ]]; then
+            gh release edit "$RELEASE_TAG" --draft=false --prerelease --latest=false
+          else
+            gh release edit "$RELEASE_TAG" --draft=false --prerelease=false --latest
           fi

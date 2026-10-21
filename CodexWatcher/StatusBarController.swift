@@ -36,6 +36,10 @@ final class StatusBarController: NSObject {
         observeMonitor()
     }
 
+    var isReadyForSmokeTest: Bool {
+        !stopped && item.button?.image != nil && popover.contentViewController != nil
+    }
+
     func closePopover() { popover.performClose(nil) }
 
     func stop() {
