@@ -38,6 +38,10 @@ struct CreditExpiryReview: Equatable {
 
 enum CreditExpiryPolicy {
     static let leadTime: TimeInterval = 15 * 60
+    static let maximumAttempts = 3
+    static let retryInterval: TimeInterval = 30
+    // Longer than the production RPC timeout (30s); a crashed process cannot hold a permanent lock.
+    static let attemptLease: TimeInterval = 90
 
     static func candidate(in credits: [ResetCredit], at date: Date) -> ResetCredit? {
         credits.filter { credit in
@@ -49,7 +53,7 @@ enum CreditExpiryPolicy {
 }
 
 /// Per-account/card claims survive restarts and serialize multiple app instances.
-/// An automatic claim is never cleared: unknown outcomes require explicit manual retry.
+/// An automatic claim is never cleared; retries belong to the original pending request.
 final class CreditExpiryActionStore {
     private let directory: URL
     private var file: URL { directory.appendingPathComponent("expiry-actions.json") }

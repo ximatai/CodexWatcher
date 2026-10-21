@@ -42,7 +42,7 @@ struct CreditExpirySettingsView: View {
             .disabled(monitor.isConfiguringExpiry || monitor.isBusy)
             if enabled {
                 Text(monitor.expiryConfiguration.mode == .automatic
-                     ? "每张卡自动尝试一次，消耗后无法撤销。"
+                     ? "每张卡最多尝试 3 次，消耗后无法撤销。"
                      : "通知提醒，确认后使用。")
                     .font(.callout).fixedSize(horizontal: false, vertical: true)
                 if !monitor.expiryConfigurationMatchesAccount {
@@ -57,7 +57,7 @@ struct CreditExpirySettingsView: View {
             Divider()
             Text("仅用于启用时的账号；应用运行且 Mac 未休眠时生效。")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                .help("每 30 秒检查一次；唤醒后补查尚未到期的卡片。结果未知时暂停自动处理，需人工核实。")
+                .help("每 30 秒检查一次。失败后间隔至少 30 秒重试原卡，固定原到期时间与请求标识；最多 3 次后转为人工核实。")
         }
         .padding(20).frame(width: 380)
         .onAppear {
@@ -77,7 +77,7 @@ struct CreditExpirySettingsView: View {
                 }
             }
         } message: {
-            Text("到期前 15 分钟自动尝试使用，即使用量为 0%。会消耗卡片，无法撤销。")
+            Text("到期前 15 分钟最多尝试 3 次，用量为 0% 也执行。消耗后无法撤销。")
         }
     }
 }

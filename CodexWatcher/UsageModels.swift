@@ -104,9 +104,17 @@ struct LoginResult: Decodable {
     let loginId: String?
     let authUrl: String?
 }
+struct AutomaticRedemption: Codable {
+    let expiresAt: Double
+    var attempts: Int = 0
+    var nextAttemptAt: Double = 0
+    var leaseUntil: Double?
+}
+
 struct PendingRedemption: Codable {
     let creditID: String
     let idempotencyKey: String
+    var automatic: AutomaticRedemption? = nil
 }
 
 /// The operation the user opened, independent of subsequent account/store refreshes.

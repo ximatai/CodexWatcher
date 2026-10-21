@@ -35,14 +35,55 @@ final class ResetAttemptStore {
     }
 
     /// A newly confirmed operation must not silently adopt another instance's retry key.
-    func prepareNew(creditID: String, owner: String) throws -> PendingRedemption? {
+    func prepareNew(creditID: String, owner: String, automaticExpiresAt: Double? = nil) throws -> PendingRedemption? {
         try withLock {
             var entries = try all()
             guard entries[owner] == nil else { return nil }
-            let attempt = PendingRedemption(creditID: creditID, idempotencyKey: UUID().uuidString)
+            let attempt = PendingRedemption(creditID: creditID, idempotencyKey: UUID().uuidString,
+                automatic: automaticExpiresAt.map { AutomaticRedemption(expiresAt: $0) })
             entries[owner] = attempt
             try write(entries)
             return attempt
+        }
+    }
+
+    /// Reserve a write attempt and its budget under the same cross-process lock.
+    /// The account, credit, original expiry and idempotency key can never change.
+    func reserveAutomaticAttempt(owner: String, expected: PendingRedemption, at date: Date) throws -> PendingRedemption? {
+        try withLock {
+            var entries = try all()
+            let now = date.timeIntervalSince1970
+            guard var current = entries[owner], current.creditID == expected.creditID,
+                  current.idempotencyKey == expected.idempotencyKey,
+                  var automatic = current.automatic,
+                  automatic.expiresAt == expected.automatic?.expiresAt,
+                  automatic.expiresAt.isFinite, now.isFinite,
+                  automatic.expiresAt > now, automatic.expiresAt - now <= CreditExpiryPolicy.leadTime,
+                  automatic.attempts >= 0, automatic.attempts < CreditExpiryPolicy.maximumAttempts,
+                  automatic.nextAttemptAt <= now, (automatic.leaseUntil ?? 0) <= now else { return nil }
+            automatic.attempts += 1
+            automatic.nextAttemptAt = now + CreditExpiryPolicy.retryInterval
+            automatic.leaseUntil = now + CreditExpiryPolicy.attemptLease
+            current.automatic = automatic
+            entries[owner] = current
+            try write(entries)
+            return current
+        }
+    }
+
+    func finishAutomaticAttempt(owner: String, expected: PendingRedemption, at date: Date) throws {
+        try withLock {
+            var entries = try all()
+            guard var current = entries[owner], current.creditID == expected.creditID,
+                  current.idempotencyKey == expected.idempotencyKey,
+                  var automatic = current.automatic,
+                  automatic.expiresAt == expected.automatic?.expiresAt,
+                  automatic.attempts == expected.automatic?.attempts else { return }
+            automatic.leaseUntil = nil
+            automatic.nextAttemptAt = date.timeIntervalSince1970 + CreditExpiryPolicy.retryInterval
+            current.automatic = automatic
+            entries[owner] = current
+            try write(entries)
         }
     }
 

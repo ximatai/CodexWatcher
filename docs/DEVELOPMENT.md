@@ -65,7 +65,7 @@ bash scripts/generate-screenshots.sh
 | 数据 | 位置与用途 |
 | --- | --- |
 | CLI 独立配置 | `~/Library/Application Support/CodexWatcher/Runtime`，与其他客户端隔离 |
-| 待确认重置 | 同级 `State/pending-resets.json`，保存账号标识、卡片 ID 和幂等键，不含密码或访问令牌 |
+| 待确认重置 | 同级 `State/pending-resets.json`，保存账号标识、卡片 ID、幂等键，及自动请求的原到期时间、次数和重试租约，不含密码或访问令牌 |
 | 临期处理记录 | 同级 `State/expiry-actions.json`，保存账号与卡片组合的哈希标识及处理模式，跨重启和实例去重；不要作为缓存删除 |
 | 应用偏好 | 本地 UserDefaults，保存外观、CLI 路径、显示选项及绑定账号的临期处理配置等 |
 
