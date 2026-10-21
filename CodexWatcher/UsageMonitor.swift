@@ -134,8 +134,8 @@ final class UsageMonitor {
         guard !started else { return }
         started = true
         await refresh()
+        await processExpiringCredits()
         expiryTask = Task { @MainActor [weak self] in
-            await self?.processExpiringCredits()
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .seconds(30)) } catch { break }
                 await self?.processExpiringCredits()
@@ -260,7 +260,7 @@ final class UsageMonitor {
             if let reservation = automaticReservation {
                 // A missing record means success already cleared this operation.
                 // A failed write keeps the lease, preventing an immediate concurrent retry.
-                try? resetStore.finishAutomaticAttempt(owner: storageKey, expected: reservation, at: expiryNow())
+                try? resetStore.finishAutomaticAttempt(owner: storageKey, expected: reservation, clock: expiryNow)
                 if pendingRedemption?.idempotencyKey == reservation.idempotencyKey,
                    let updated = try? resetStore.pending(for: storageKey) {
                     pendingRedemption = updated
@@ -304,13 +304,20 @@ final class UsageMonitor {
             }
             if automatically {
                 guard let reserved = try resetStore.reserveAutomaticAttempt(owner: storageKey,
-                    expected: attempt, at: expiryNow()) else {
+                    expected: attempt, clock: expiryNow) else {
                     pendingRedemption = try resetStore.pending(for: storageKey)
                     return
                 }
                 attempt = reserved
                 automaticReservation = reserved
                 pendingRedemption = reserved
+                // Both stores can wait for another process's file lock. Revalidate
+                // after reservation, immediately before the irreversible request.
+                let target = ResetConfirmation(accountKey: storageKey, email: confirmation.email,
+                    creditID: reserved.creditID, credit: confirmation.credit,
+                    windowID: confirmation.windowID, retry: reserved)
+                guard isResetConfirmationCurrent(target),
+                      automaticExpiryAllowed(target, at: expiryNow()) else { return }
             }
             let result: ResetResult = try await client.request("account/rateLimitResetCredit/consume", params: [
                 "creditId": attempt.creditID, "idempotencyKey": attempt.idempotencyKey
@@ -345,7 +352,17 @@ final class UsageMonitor {
             && expiryConfiguration.accountKey == redemptionStorageKey
     }
 
-    func configureExpiryHandling(_ mode: CreditExpiryMode) async {
+    func makeAutomaticExpiryAuthorization() -> AutomaticExpiryAuthorization? {
+        guard !isBusy, loginID == nil, account?.type == "chatgpt",
+              let owner = snapshot?.accountId, !owner.isEmpty else {
+            expiryHandlingMessage = "请先连接账号并刷新用量，再确认自动使用。"
+            return nil
+        }
+        return AutomaticExpiryAuthorization(accountKey: owner)
+    }
+
+    func configureExpiryHandling(_ mode: CreditExpiryMode,
+                                 authorization: AutomaticExpiryAuthorization? = nil) async {
         guard !isConfiguringExpiry else { return }
         isConfiguringExpiry = true
         defer { isConfiguringExpiry = false }
@@ -356,9 +373,15 @@ final class UsageMonitor {
                 expiryHandlingMessage = "请先连接账号并刷新用量，再开启临期处理。"
                 return
             }
-            if mode == .automatic && snapshot?.accountId?.isEmpty != false {
-                expiryHandlingMessage = "服务端未提供稳定账号标识，无法开启自动使用。"
-                return
+            if mode == .automatic {
+                guard snapshot?.accountId?.isEmpty == false else {
+                    expiryHandlingMessage = "服务端未提供稳定账号标识，无法开启自动使用。"
+                    return
+                }
+                guard authorization?.accountKey == owner else {
+                    expiryHandlingMessage = "账号已变化，请重新确认自动使用。"
+                    return
+                }
             }
             if mode == .remind {
                 // Switching away from automatic must stop writes even if permission is denied.
@@ -483,6 +506,15 @@ final class UsageMonitor {
                 : "自动使用结果未确认，将重试原卡片（\(automatic.attempts)/3）。"
         } else if let errorMessage { expiryHandlingMessage = errorMessage }
         else { expiryHandlingMessage = notice }
+    }
+
+    func resolveExpiryReview(_ review: CreditExpiryReview) -> CreditExpiryReviewResolution {
+        guard !isBusy else { return .waiting }
+        guard review.accountKey == redemptionStorageKey, account?.type == "chatgpt" else { return .invalid }
+        guard !isStale(at: .now) else { return .waiting }
+        guard let card = sortedCredits.first(where: { $0.id == review.creditID }),
+              let target = makeResetConfirmation(for: card) else { return .invalid }
+        return .ready(target)
     }
 
     func reviewExpiringCredit(accountKey: String, creditID: String) async {

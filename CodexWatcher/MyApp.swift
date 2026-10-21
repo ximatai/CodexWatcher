@@ -29,8 +29,7 @@ final class WatcherAppDelegate: NSObject, NSApplicationDelegate {
     private var clockTimer: Timer?
     private var statusController: StatusBarController?
     private var dashboard: NSWindow?
-    private var expiryNotifications: CreditExpiryNotifications?
-    private var wakeObserver: NSObjectProtocol?
+    private var expiryRuntime: CreditExpiryRuntime?
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         if Self.smokeRoot != nil {
@@ -45,41 +44,39 @@ final class WatcherAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        statusController = StatusBarController(monitor: monitor) { [weak self] in self?.showDashboard() }
+        statusController = StatusBarController(monitor: monitor, observesExternalEvents: Self.smokeRoot == nil) { [weak self] in self?.showDashboard() }
         let event = NSAppleEventManager.shared().currentAppleEvent
         let launchedAtLogin = event?.eventID == kAEOpenApplication
             && event?.paramDescriptor(forKeyword: keyAEPropData)?.enumCodeValue == keyAELaunchedAsLogInItem
         if !launchedAtLogin { showDashboard() }
         clockTimer = Timer.scheduledTimer(timeInterval: 30, target: self,
                                          selector: #selector(updateClock), userInfo: nil, repeats: true)
-        if let root = Self.smokeRoot {
-            Task { await runReleaseSmokeTest(root: root) }
-        } else {
-            let notifications = CreditExpiryNotifications { [weak self] owner, creditID in
-                self?.showDashboard()
-                Task { await self?.monitor.reviewExpiringCredit(accountKey: owner, creditID: creditID) }
+        let openReview: (String, String) -> Void = { [weak self] owner, creditID in
+            self?.showDashboard()
+            Task { await self?.monitor.reviewExpiringCredit(accountKey: owner, creditID: creditID) }
+        }
+        let smokeNotifications = Self.smokeRoot.map { _ in SmokeExpiryNotifications(openReview: openReview) }
+        let notifications: any CreditExpiryNotificationService
+        if let smokeNotifications { notifications = smokeNotifications }
+        else { notifications = CreditExpiryNotifications(openReview: openReview) }
+        let wakeNotifications = Self.smokeRoot == nil
+            ? NSWorkspace.shared.notificationCenter : NotificationCenter()
+        let runtime = CreditExpiryRuntime(monitor: monitor, notifications: notifications,
+                                          wakeNotifications: wakeNotifications)
+        expiryRuntime = runtime
+        Task {
+            await runtime.start()
+            if let root = Self.smokeRoot, let smokeNotifications {
+                await runReleaseSmokeTest(root: root, notifications: smokeNotifications,
+                                          wakeNotifications: wakeNotifications)
             }
-            expiryNotifications = notifications
-            monitor.requestExpiryNotificationPermission = { [weak notifications] in
-                await notifications?.requestPermission() ?? false
-            }
-            monitor.deliverExpiryReminder = { [weak notifications] reminder in
-                guard let notifications else { throw WatcherError.message("通知不可用。") }
-                try await notifications.deliver(reminder)
-            }
-            monitor.clearExpiryNotifications = { [weak notifications] in notifications?.clear() }
-            wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
-                forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
-                Task { @MainActor in await self?.monitor.processExpiringCredits() }
-            }
-            Task { await monitor.start() }
         }
     }
 
     // Executes inside the actual packaged app; the fixture rejects all writes and
     // cannot reach Codex or the user's account. A missing report fails the runner.
-    private func runReleaseSmokeTest(root: URL) async {
-        await monitor.refresh()
+    private func runReleaseSmokeTest(root: URL, notifications: SmokeExpiryNotifications,
+                                     wakeNotifications: NotificationCenter) async {
         while monitor.isBusy {
             try? await Task.sleep(for: .milliseconds(20))
         }
@@ -87,13 +84,48 @@ final class WatcherAppDelegate: NSObject, NSApplicationDelegate {
               monitor.errorMessage == nil, statusController?.isReadyForSmokeTest == true,
               let dashboard, dashboard.isVisible, dashboard.contentView != nil,
               dashboard.frame.width > 0, dashboard.frame.height > 0 else {
-            NSApp.terminate(nil)
+            finishReleaseSmokeTest()
             return
         }
+        guard monitor.expiryConfiguration.mode == .off, notifications.permissionRequests == 0,
+              notifications.delivered.isEmpty else { finishReleaseSmokeTest(); return }
         for appearance in [AppAppearance.light, .dark, .system] { appearance.apply(to: NSApp) }
+        guard await statusController?.verifyPopoverForSmokeTest() == true else {
+            finishReleaseSmokeTest(); return
+        }
+        // Exercise the real runtime callbacks and wake observer using only local fakes.
+        await monitor.configureExpiryHandling(.remind)
+        let previousUpdate = monitor.lastUpdated
+        wakeNotifications.post(name: NSWorkspace.didWakeNotification, object: nil)
+        let deadline = Date().addingTimeInterval(10)
+        while notifications.delivered.isEmpty && Date() < deadline {
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+        guard let reminder = notifications.delivered.first, notifications.permissionRequests == 1,
+              notifications.delivered.count == 1, monitor.lastUpdated != previousUpdate else {
+            finishReleaseSmokeTest(); return
+        }
+        notifications.openReview(reminder.accountKey, reminder.creditID)
+        while (monitor.expiryReview?.creditID != reminder.creditID || dashboard.sheets.isEmpty) && Date() < deadline {
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+        guard monitor.expiryReview?.creditID == reminder.creditID, !dashboard.sheets.isEmpty,
+              monitor.pendingRedemption == nil,
+              !FileManager.default.fileExists(atPath: root.appendingPathComponent("State/pending-resets.json").path) else {
+            finishReleaseSmokeTest(); return
+        }
         do {
             try Data("passed\n".utf8).write(to: root.appendingPathComponent("result.txt"), options: .atomic)
         } catch { /* Missing report is a failed smoke test. */ }
+        finishReleaseSmokeTest()
+    }
+
+    private func finishReleaseSmokeTest() {
+        // AppKit can defer termination while a confirmation sheet is open.
+        for sheet in dashboard?.sheets ?? [] {
+            dashboard?.endSheet(sheet, returnCode: .cancel)
+            sheet.orderOut(nil)
+        }
         NSApp.terminate(nil)
     }
 
@@ -128,8 +160,19 @@ final class WatcherAppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         clockTimer?.invalidate()
-        if let wakeObserver { NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver) }
         statusController?.stop()
-        monitor.shutdown()
+        expiryRuntime?.stop()
     }
+}
+
+/// In-process test adapter: never initializes UNUserNotificationCenter or sends notifications.
+@MainActor
+private final class SmokeExpiryNotifications: CreditExpiryNotificationService {
+    private(set) var permissionRequests = 0
+    private(set) var delivered: [CreditExpiryReminder] = []
+    let openReview: (String, String) -> Void
+    init(openReview: @escaping (String, String) -> Void) { self.openReview = openReview }
+    func requestPermission() async -> Bool { permissionRequests += 1; return true }
+    func deliver(_ reminder: CreditExpiryReminder) async throws { delivered.append(reminder) }
+    func clear() { delivered.removeAll() }
 }

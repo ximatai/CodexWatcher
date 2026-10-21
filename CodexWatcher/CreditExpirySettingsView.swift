@@ -5,11 +5,19 @@ struct CreditExpirySettingsView: View {
     var onClose: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var confirmingAutomatic = false
+    @State private var automaticAuthorization: AutomaticExpiryAuthorization?
     @State private var selectedMode = CreditExpiryMode.remind
 
     private var enabled: Bool { monitor.expiryConfiguration.mode != .off }
     private func select(_ mode: CreditExpiryMode) {
-        if mode == .automatic { confirmingAutomatic = true }
+        if mode == .automatic {
+            guard let authorization = monitor.makeAutomaticExpiryAuthorization() else {
+                if enabled { selectedMode = monitor.expiryConfiguration.mode }
+                return
+            }
+            automaticAuthorization = authorization
+            confirmingAutomatic = true
+        }
         else {
             Task {
                 await monitor.configureExpiryHandling(mode)
@@ -42,7 +50,7 @@ struct CreditExpirySettingsView: View {
             .disabled(monitor.isConfiguringExpiry || monitor.isBusy)
             if enabled {
                 Text(monitor.expiryConfiguration.mode == .automatic
-                     ? "每张卡最多尝试 3 次，消耗后无法撤销。"
+                     ? "失败时最多重试 2 次，卡片消耗后无法恢复。"
                      : "通知提醒，确认后使用。")
                     .font(.callout).fixedSize(horizontal: false, vertical: true)
                 if !monitor.expiryConfigurationMatchesAccount {
@@ -66,18 +74,19 @@ struct CreditExpirySettingsView: View {
         .onChange(of: monitor.expiryConfiguration.mode) { _, mode in
             if mode != .off { selectedMode = mode }
         }
-        .alert("启用自动使用？", isPresented: $confirmingAutomatic) {
+        .alert("启用自动使用？", isPresented: $confirmingAutomatic,
+               presenting: automaticAuthorization) { authorization in
             Button("取消", role: .cancel) {
                 if enabled { selectedMode = monitor.expiryConfiguration.mode }
             }
             Button("启用", role: .destructive) {
                 Task {
-                    await monitor.configureExpiryHandling(.automatic)
+                    await monitor.configureExpiryHandling(.automatic, authorization: authorization)
                     if enabled { selectedMode = monitor.expiryConfiguration.mode }
                 }
             }
-        } message: {
-            Text("到期前 15 分钟最多尝试 3 次，用量为 0% 也执行。消耗后无法撤销。")
+        } message: { _ in
+            Text("到期前 15 分钟会自动使用重置卡，失败时最多重试 2 次。\n\n即使当前额度非常充裕，甚至没有使用，也会尝试使用重置卡。卡片消耗后无法恢复。")
         }
     }
 }

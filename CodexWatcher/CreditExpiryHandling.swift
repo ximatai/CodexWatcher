@@ -1,6 +1,7 @@
 import Foundation
 import Darwin
 import CryptoKit
+import Observation
 
 enum CreditExpiryMode: String, Codable, CaseIterable, Identifiable {
     case off, remind, automatic
@@ -27,6 +28,41 @@ struct CreditExpiryReminder: Equatable {
     var identifier: String {
         let value = "\(accountKey.utf8.count):\(accountKey)\(creditID)"
         return "credit-expiry-" + SHA256.hash(data: Data(value.utf8)).map { String(format: "%02x", $0) }.joined()
+    }
+}
+
+/// The account the user saw when opening the automatic-use authorization dialog.
+struct AutomaticExpiryAuthorization: Identifiable {
+    let id = UUID()
+    let accountKey: String
+}
+
+enum CreditExpiryReviewResolution {
+    case waiting, invalid
+    case ready(ResetConfirmation)
+}
+
+@MainActor @Observable
+final class CreditExpiryReviewQueue {
+    private(set) var pending: CreditExpiryReview?
+    var isDismissingSheet = false
+
+    func enqueue(_ review: CreditExpiryReview, dismissingSheet: Bool = false) {
+        pending = review
+        isDismissingSheet = isDismissingSheet || dismissingSheet
+    }
+
+    func nextConfirmation(using monitor: UsageMonitor) -> ResetConfirmation? {
+        guard !isDismissingSheet, let pending else { return nil }
+        switch monitor.resolveExpiryReview(pending) {
+        case .waiting: return nil
+        case .invalid:
+            self.pending = nil
+            return nil
+        case .ready(let confirmation):
+            self.pending = nil
+            return confirmation
+        }
     }
 }
 

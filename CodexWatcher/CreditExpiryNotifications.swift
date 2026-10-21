@@ -3,7 +3,7 @@ import UserNotifications
 
 /// Notification clicks only open the existing confirmation flow; never redeem here.
 @MainActor
-final class CreditExpiryNotifications: NSObject, UNUserNotificationCenterDelegate {
+final class CreditExpiryNotifications: NSObject, CreditExpiryNotificationService, UNUserNotificationCenterDelegate {
     private let center = UNUserNotificationCenter.current()
     private let openReview: (String, String) -> Void
 

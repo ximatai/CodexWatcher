@@ -30,7 +30,8 @@ private struct DashboardContent: View {
     @State private var resetConfirmation: ResetConfirmation?
     @State private var showingMenuBarSettings = false
     @State private var showingExpirySettings = false
-    @State private var pendingExpiryReview: CreditExpiryReview?
+    @State private var expiryReviewQueue = CreditExpiryReviewQueue()
+    @FocusState private var quitButtonFocused: Bool
     private let loginItem = LoginItemController.shared
     private var format: PresentationFormat { PresentationFormat(locale: locale, timeZone: timeZone) }
     private var palette: AppPalette { AppPalette(dark: colorScheme == .dark) }
@@ -72,21 +73,25 @@ private struct DashboardContent: View {
             .foregroundStyle(.primary)
             .tint(palette.accent)
         }
-        .sheet(isPresented: $showingMenuBarSettings, onDismiss: showPendingExpiryReview) {
+        .sheet(isPresented: $showingMenuBarSettings, onDismiss: finishExpiryReviewDismissal) {
             MenuBarSettingsView(monitor: monitor)
         }
-        .sheet(isPresented: $showingExpirySettings, onDismiss: showPendingExpiryReview) {
+        .sheet(isPresented: $showingExpirySettings, onDismiss: finishExpiryReviewDismissal) {
             CreditExpirySettingsView(monitor: monitor)
         }
         .onChange(of: monitor.expiryReview, initial: true) { _, review in
             guard handlesExpiryReminders, let review else { return }
-            pendingExpiryReview = review
+            expiryReviewQueue.enqueue(review, dismissingSheet:
+                showingExpirySettings || showingMenuBarSettings || resetConfirmation != nil)
             if showingExpirySettings { showingExpirySettings = false }
             else if showingMenuBarSettings { showingMenuBarSettings = false }
             else if resetConfirmation != nil { resetConfirmation = nil }
             else { showPendingExpiryReview() }
         }
-        .sheet(item: $resetConfirmation, onDismiss: showPendingExpiryReview) { confirmation in
+        .onChange(of: monitor.isBusy) { _, busy in
+            if !busy { showPendingExpiryReview() }
+        }
+        .sheet(item: $resetConfirmation, onDismiss: finishExpiryReviewDismissal) { confirmation in
             ResetConfirmationView(monitor: monitor, confirmation: confirmation,
                 cancel: { resetConfirmation = nil },
                 confirm: {
@@ -100,13 +105,17 @@ private struct DashboardContent: View {
         .task { await monitor.refresh() }
     }
 
+    private func finishExpiryReviewDismissal() {
+        expiryReviewQueue.isDismissingSheet = false
+        showPendingExpiryReview()
+    }
+
     private func showPendingExpiryReview() {
-        guard handlesExpiryReminders, let review = pendingExpiryReview else { return }
-        pendingExpiryReview = nil
-        guard let card = monitor.sortedCredits.first(where: { $0.id == review.creditID }),
-              let target = monitor.makeResetConfirmation(for: card),
-              target.accountKey == review.accountKey else { return }
-        resetConfirmation = target
+        guard handlesExpiryReminders, !showingExpirySettings, !showingMenuBarSettings,
+              resetConfirmation == nil else { return }
+        if let target = expiryReviewQueue.nextConfirmation(using: monitor) {
+            resetConfirmation = target
+        }
     }
 
     private var separator: some View {
@@ -383,12 +392,21 @@ private struct DashboardContent: View {
                     Image(systemName: "gearshape").font(.system(size: 14))
                 }
                 .menuStyle(.borderlessButton).fixedSize()
+                .accessibilityIdentifier("dashboard-settings")
                 .modifier(ControlHoverFeedback(color: palette.accent))
                 .disabled(monitor.isBusy || monitor.loginID != nil).help("设置与外观")
                 Button { NSApplication.shared.terminate(nil) } label: {
-                    Image(systemName: "power").font(.system(size: 14)).frame(width: 24, height: 24)
+                    Image(systemName: "power").font(.system(size: 14)).frame(width: 28, height: 28)
                 }.buttonStyle(.plain).foregroundStyle(.secondary).help("退出应用").accessibilityLabel("退出应用")
+                    .focused($quitButtonFocused)
+                    .focusEffectDisabled()
                     .modifier(ControlHoverFeedback(color: palette.accent))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 6)
+                            .strokeBorder(palette.accent, lineWidth: 2)
+                            .opacity(quitButtonFocused ? 1 : 0)
+                            .allowsHitTesting(false)
+                    }
             }
             .padding(.horizontal, 22)
             .frame(height: 54)

@@ -49,10 +49,10 @@ final class ResetAttemptStore {
 
     /// Reserve a write attempt and its budget under the same cross-process lock.
     /// The account, credit, original expiry and idempotency key can never change.
-    func reserveAutomaticAttempt(owner: String, expected: PendingRedemption, at date: Date) throws -> PendingRedemption? {
+    func reserveAutomaticAttempt(owner: String, expected: PendingRedemption, clock: () -> Date = Date.init) throws -> PendingRedemption? {
         try withLock {
             var entries = try all()
-            let now = date.timeIntervalSince1970
+            let now = clock().timeIntervalSince1970
             guard var current = entries[owner], current.creditID == expected.creditID,
                   current.idempotencyKey == expected.idempotencyKey,
                   var automatic = current.automatic,
@@ -71,7 +71,7 @@ final class ResetAttemptStore {
         }
     }
 
-    func finishAutomaticAttempt(owner: String, expected: PendingRedemption, at date: Date) throws {
+    func finishAutomaticAttempt(owner: String, expected: PendingRedemption, clock: () -> Date = Date.init) throws {
         try withLock {
             var entries = try all()
             guard var current = entries[owner], current.creditID == expected.creditID,
@@ -80,7 +80,7 @@ final class ResetAttemptStore {
                   automatic.expiresAt == expected.automatic?.expiresAt,
                   automatic.attempts == expected.automatic?.attempts else { return }
             automatic.leaseUntil = nil
-            automatic.nextAttemptAt = date.timeIntervalSince1970 + CreditExpiryPolicy.retryInterval
+            automatic.nextAttemptAt = clock().timeIntervalSince1970 + CreditExpiryPolicy.retryInterval
             current.automatic = automatic
             entries[owner] = current
             try write(entries)

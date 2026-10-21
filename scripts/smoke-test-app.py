@@ -32,18 +32,21 @@ done
         'accountId': 'smoke-fixture',
         'rateLimits': {'limitId': 'codex', 'primary': {
             'usedPercent': 35, 'windowDurationMins': 60, 'resetsAt': time.time() + 1800}},
-        'rateLimitResetCredits': {'availableCount': 0, 'credits': []}
+        'rateLimitResetCredits': {'availableCount': 1, 'credits': [{
+            'id': 'smoke-card', 'status': 'available', 'resetType': 'codexRateLimits',
+            'grantedAt': time.time() - 60, 'expiresAt': time.time() + 800}]}
     }))
     # Strip credentials and proxy variables; the only child executable is the fixture.
     environment = {key: value for key, value in os.environ.items()
                    if key in ('HOME', 'USER', 'LOGNAME', 'TMPDIR', 'PATH', 'LANG')}
     environment['WATCHER_SMOKE_ROOT'] = directory
     subprocess.run([str(app / 'Contents/MacOS/CodexWatcher'), '--release-smoke-test'],
-                   env=environment, timeout=45, check=True, stdout=subprocess.DEVNULL)
-    if (root / 'result.txt').read_text() != 'passed\n':
+                   env=environment, timeout=60, check=True, stdout=subprocess.DEVNULL)
+    report = root / 'result.txt'
+    if not report.exists() or report.read_text() != 'passed\n':
         raise SystemExit('Packaged app did not pass startup checks')
     methods = [json.loads(line)['method'] for line in (root / 'requests.jsonl').read_text().splitlines()]
     allowed = {'initialize', 'initialized', 'account/read', 'account/rateLimits/read'}
     if set(methods) != allowed:
         raise SystemExit('Smoke fixture received unexpected requests')
-print('Packaged app startup, dashboard, status item, themes and isolated reads passed.')
+print('Packaged app startup, popover/menu lifecycle, wake, fake reminder and confirmation navigation passed; no writes.')

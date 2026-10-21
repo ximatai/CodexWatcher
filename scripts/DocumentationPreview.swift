@@ -87,7 +87,7 @@ struct DocumentationPreview {
         try await render(CreditExpirySettingsView(monitor: monitor).defaultAppStorage(defaults),
                          size: NSSize(width: 380, height: 250), dark: false,
                          to: output.appendingPathComponent("credit-expiry-reminder.png"))
-        await monitor.configureExpiryHandling(.automatic)
+        await monitor.configureExpiryHandling(.automatic, authorization: monitor.makeAutomaticExpiryAuthorization())
         try await render(CreditExpirySettingsView(monitor: monitor).defaultAppStorage(defaults),
                          size: NSSize(width: 380, height: 250), dark: true,
                          to: output.appendingPathComponent("credit-expiry-automatic.png"))
