@@ -36,17 +36,17 @@ struct CreditExpirySettingsView: View {
                     selectedMode = $0
                     if enabled { select($0) }
                 })) {
-                Text("提醒后人工确认").tag(CreditExpiryMode.remind)
+                Text("提醒后确认").tag(CreditExpiryMode.remind)
                 Text("自动使用").tag(CreditExpiryMode.automatic)
             }
             .disabled(monitor.isConfiguringExpiry || monitor.isBusy)
             if enabled {
                 Text(monitor.expiryConfiguration.mode == .automatic
-                     ? "临期后直接尝试使用，包括已用额度为 0% 的情况。每张卡自动尝试一次；结果未知时转为人工核实。"
-                     : "发送系统通知，点击后进入原有二次确认页；不会直接使用卡片。")
+                     ? "每张卡自动尝试一次，消耗后无法撤销。"
+                     : "通知提醒，确认后使用。")
                     .font(.callout).fixedSize(horizontal: false, vertical: true)
                 if !monitor.expiryConfigurationMatchesAccount {
-                    Label("当前账号与启用时不同，临期处理已暂停。请关闭后为当前账号重新开启。", systemImage: "pause.circle")
+                    Label("账号已切换，已暂停。请关闭后重新开启。", systemImage: "pause.circle")
                         .font(.caption).foregroundStyle(.orange)
                 }
             }
@@ -55,10 +55,9 @@ struct CreditExpirySettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Divider()
-            Text("仅在应用运行且 Mac 唤醒时检查，每 30 秒检查一次。休眠或退出期间不会执行；唤醒后仅处理尚未到期的卡片。")
+            Text("仅用于启用时的账号；应用运行且 Mac 未休眠时生效。")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            Text("设置仅用于启用时的账号。自动使用会消耗重置卡且无法撤销。")
-                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                .help("每 30 秒检查一次；唤醒后补查尚未到期的卡片。结果未知时暂停自动处理，需人工核实。")
         }
         .padding(20).frame(width: 380)
         .onAppear {
@@ -71,14 +70,14 @@ struct CreditExpirySettingsView: View {
             Button("取消", role: .cancel) {
                 if enabled { selectedMode = monitor.expiryConfiguration.mode }
             }
-            Button("启用自动使用", role: .destructive) {
+            Button("启用", role: .destructive) {
                 Task {
                     await monitor.configureExpiryHandling(.automatic)
                     if enabled { selectedMode = monitor.expiryConfiguration.mode }
                 }
             }
         } message: {
-            Text("重置卡到期前 15 分钟内会直接尝试使用，即使已用额度为 0%。每张卡自动尝试一次，消费后无法撤销。")
+            Text("到期前 15 分钟自动尝试使用，即使用量为 0%。会消耗卡片，无法撤销。")
         }
     }
 }

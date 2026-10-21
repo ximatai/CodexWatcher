@@ -8,7 +8,7 @@ enum CreditExpiryMode: String, Codable, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .off: return "关闭"
-        case .remind: return "提醒后人工确认"
+        case .remind: return "提醒后确认"
         case .automatic: return "自动使用"
         }
     }

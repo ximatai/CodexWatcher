@@ -85,11 +85,11 @@ struct DocumentationPreview {
         monitor.requestExpiryNotificationPermission = { true }
         await monitor.configureExpiryHandling(.remind)
         try await render(CreditExpirySettingsView(monitor: monitor).defaultAppStorage(defaults),
-                         size: NSSize(width: 380, height: 390), dark: false,
+                         size: NSSize(width: 380, height: 250), dark: false,
                          to: output.appendingPathComponent("credit-expiry-reminder.png"))
         await monitor.configureExpiryHandling(.automatic)
         try await render(CreditExpirySettingsView(monitor: monitor).defaultAppStorage(defaults),
-                         size: NSSize(width: 380, height: 410), dark: true,
+                         size: NSSize(width: 380, height: 250), dark: true,
                          to: output.appendingPathComponent("credit-expiry-automatic.png"))
         print("Exported six previews with fictional data; no real account, notification permission or reset was used.")
     }
