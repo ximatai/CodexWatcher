@@ -2,6 +2,31 @@ import XCTest
 @testable import WatcherCore
 
 final class UsageTests: XCTestCase {
+    func testNewOperationNeverAdoptsExistingPendingKey() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("WatcherCreateOnly-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = ResetAttemptStore(directory: directory)
+        let first = try XCTUnwrap(store.prepareNew(creditID: "card-a", owner: "account"))
+        XCTAssertNil(try store.prepareNew(creditID: "card-a", owner: "account"))
+        XCTAssertNil(try store.prepareNew(creditID: "card-b", owner: "account"))
+        XCTAssertEqual(try store.pending(for: "account")?.idempotencyKey, first.idempotencyKey)
+    }
+
+    func testConcurrentNewOperationsCreateExactlyOneAttempt() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("WatcherCreateRace-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let results = LockedRedemptionResults()
+        DispatchQueue.concurrentPerform(iterations: 32) { index in
+            do {
+                let attempt = try ResetAttemptStore(directory: directory).prepareNew(creditID: "card-\(index)", owner: "account")
+                results.record(attempt?.idempotencyKey)
+            } catch { results.recordUnexpectedError() }
+        }
+        XCTAssertEqual(results.keys.count, 1)
+        XCTAssertEqual(results.failures, 31)
+        XCTAssertEqual(results.unexpectedErrors, 0)
+    }
+
     func testNaturalTimeBaselineAndDeviation() throws {
         let quota = QuotaWindow(usedPercent: 21, windowDurationMins: 10080, resetsAt: 1793082734)
         let now = Date(timeIntervalSince1970: 1792553989)
@@ -105,6 +130,13 @@ private final class LockedRedemptionResults: @unchecked Sendable {
     private let lock = NSLock()
     private(set) var keys = Set<String>()
     private(set) var failures = 0
+    private(set) var unexpectedErrors = 0
+
+    func recordUnexpectedError() {
+        lock.lock()
+        defer { lock.unlock() }
+        unexpectedErrors += 1
+    }
 
     func record(_ key: String?) {
         lock.lock()

@@ -18,22 +18,24 @@ final class UsageMonitor {
     private(set) var notice: String?
     private(set) var pendingRedemption: PendingRedemption?
     var selectedWindowID: String? {
-        didSet { UserDefaults.standard.set(selectedWindowID, forKey: "selectedWindowID") }
+        didSet { defaults.set(selectedWindowID, forKey: "selectedWindowID") }
     }
     private(set) var executablePath: String
     @ObservationIgnored private let client: AppServerClient
     @ObservationIgnored private let resetStore: ResetAttemptStore
+    @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private var started = false
     @ObservationIgnored private var pollTask: Task<Void, Never>?
     @ObservationIgnored private var notificationTask: Task<Void, Never>?
     @ObservationIgnored private var loginTimeout: Task<Void, Never>?
 
-    init() {
-        let path = UserDefaults.standard.string(forKey: "codexExecutablePath")
+    init(client suppliedClient: AppServerClient? = nil, defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        let path = defaults.string(forKey: "codexExecutablePath")
             ?? AppServerClient.defaultExecutablePath
-        executablePath = path
-        selectedWindowID = UserDefaults.standard.string(forKey: "selectedWindowID")
-        client = AppServerClient(executablePath: path)
+        client = suppliedClient ?? AppServerClient(executablePath: path)
+        executablePath = client.executablePath
+        selectedWindowID = defaults.string(forKey: "selectedWindowID")
         resetStore = ResetAttemptStore(directory: client.runtimeDirectory.deletingLastPathComponent()
             .appendingPathComponent("State", isDirectory: true))
         client.onNotification = { [weak self] method, params in
@@ -64,12 +66,38 @@ final class UsageMonitor {
 
     var canRedeem: Bool { redemptionStorageKey != nil && errorMessage == nil }
 
-    func canConfirmRedemption(_ credit: ResetCredit?, at date: Date) -> Bool {
-        guard !isBusy, account != nil, redemptionStorageKey != nil else { return false }
+    func makeResetConfirmation(for credit: ResetCredit?) -> ResetConfirmation? {
+        guard let account, let owner = redemptionStorageKey else { return nil }
+        let targetID: String
+        if let pending = pendingRedemption {
+            guard credit == nil || credit?.id == pending.creditID else { return nil }
+            targetID = pending.creditID
+        } else {
+            guard let credit else { return nil }
+            targetID = credit.id
+        }
+        let confirmation = ResetConfirmation(accountKey: owner, email: account.email, creditID: targetID,
+            credit: sortedCredits.first { $0.id == targetID } ?? credit,
+            windowID: selectedWindow?.id, retry: pendingRedemption)
+        return canConfirmRedemption(confirmation, at: .now) ? confirmation : nil
+    }
+
+    func isResetConfirmationCurrent(_ confirmation: ResetConfirmation) -> Bool {
+        guard account != nil, redemptionStorageKey == confirmation.accountKey else { return false }
+        if let retry = confirmation.retry {
+            return retry.creditID == confirmation.creditID
+                && pendingRedemption?.creditID == confirmation.creditID
+                && pendingRedemption?.idempotencyKey == retry.idempotencyKey
+        }
+        return pendingRedemption == nil
+    }
+
+    func canConfirmRedemption(_ confirmation: ResetConfirmation, at date: Date) -> Bool {
+        guard !isBusy, isResetConfirmationCurrent(confirmation) else { return false }
         // A retry must remain possible if the consumed card disappeared from the refreshed list.
-        if pendingRedemption != nil { return true }
-        guard canRedeem, !isStale(at: date), let credit else { return false }
-        return sortedCredits.contains { $0.id == credit.id && $0.isUsable(at: date) }
+        if confirmation.retry != nil { return true }
+        guard canRedeem, !isStale(at: date) else { return false }
+        return sortedCredits.contains { $0.id == confirmation.creditID && $0.isUsable(at: date) }
     }
 
     func isStale(at date: Date) -> Bool {
@@ -177,6 +205,7 @@ final class UsageMonitor {
         isBusy = true
         defer { isBusy = false }
         do {
+            try await client.connect()
             let _: EmptyResponse = try await client.request("account/logout")
             account = nil
             snapshot = nil
@@ -188,9 +217,13 @@ final class UsageMonitor {
     }
 
     /// Persist before sending; unknown outcomes are retried with the same key, even after restart.
-    func redeem(_ credit: ResetCredit?) async {
-        guard canConfirmRedemption(credit, at: .now), let storageKey = redemptionStorageKey else { return }
-        let confirmedAttempt = pendingRedemption
+    func redeem(_ confirmation: ResetConfirmation) async {
+        guard isResetConfirmationCurrent(confirmation) else {
+            notice = "操作已变化，请重新打开确认页。"
+            return
+        }
+        guard canConfirmRedemption(confirmation, at: .now) else { return }
+        let storageKey = confirmation.accountKey
         isBusy = true
         notice = nil
         defer { isBusy = false }
@@ -198,31 +231,27 @@ final class UsageMonitor {
             try await client.connect()
             // The dialog may have remained open across expiry, reconnection or an account change.
             try await readAccountAndUsage()
-            guard redemptionStorageKey == storageKey else {
-                throw WatcherError.message("账号已变化，请重新核对账号和重置卡后再操作。")
+            guard isResetConfirmationCurrent(confirmation) else {
+                notice = "操作已变化，请重新打开确认页。"
+                return
             }
             let attempt: PendingRedemption
-            if let confirmedAttempt {
-                guard pendingRedemption?.idempotencyKey == confirmedAttempt.idempotencyKey else {
-                    notice = "上次操作状态已更新，请查看最新额度后再操作。"
-                    return
-                }
+            if let confirmedAttempt = confirmation.retry {
                 attempt = confirmedAttempt
-            } else if let credit {
-                guard pendingRedemption == nil else {
-                    throw WatcherError.message("存在尚未确认的重置，请先核实上次操作。")
-                }
+            } else {
                 guard !isStale(at: .now), sortedCredits.contains(where: {
-                    $0.id == credit.id && $0.isUsable(at: .now)
+                    $0.id == confirmation.creditID && $0.isUsable(at: .now)
                 }) else {
                     throw WatcherError.message("所选重置卡或额度状态已变化，请刷新后重新确认。")
                 }
-                attempt = try resetStore.prepare(creditID: credit.id, owner: storageKey)
-                pendingRedemption = attempt
-                guard attempt.creditID == credit.id else {
-                    throw WatcherError.message("其他实例已开始重置，请先核实该操作。")
+                guard let created = try resetStore.prepareNew(creditID: confirmation.creditID, owner: storageKey) else {
+                    pendingRedemption = try resetStore.pending(for: storageKey)
+                    notice = "操作已变化，请重新打开确认页。"
+                    return
                 }
-            } else { return }
+                attempt = created
+                pendingRedemption = attempt
+            }
             let result: ResetResult = try await client.request("account/rateLimitResetCredit/consume", params: [
                 "creditId": attempt.creditID, "idempotencyKey": attempt.idempotencyKey
             ])
@@ -230,7 +259,7 @@ final class UsageMonitor {
             case "reset", "alreadyRedeemed": notice = "重置已完成。"
             case "nothingToReset": notice = "当前没有符合条件的额度可重置。"
             case "noCredit": notice = "当前没有可用的重置卡。"
-            default: throw WatcherError.message("重置结果未知，请重试确认。")
+            default: throw WatcherError.message("重置结果未知，请重试原重置操作。")
             }
             try resetStore.clear(owner: storageKey, idempotencyKey: attempt.idempotencyKey)
             pendingRedemption = nil
@@ -239,7 +268,7 @@ final class UsageMonitor {
         } catch {
             notice = nil
             errorMessage = pendingRedemption == nil ? error.localizedDescription
-                : "尚未确认重置结果。请使用“重试上次重置”核实，重试不会重复消耗。"
+                : "尚未确认重置结果。可重试原重置操作；若此前尚未完成，可能消耗 1 张卡。同一请求标识用于避免重复消费，操作无法撤销。"
         }
     }
 
@@ -258,7 +287,7 @@ final class UsageMonitor {
         client.stop()
         client.executablePath = url.path
         executablePath = url.path
-        UserDefaults.standard.set(url.path, forKey: "codexExecutablePath")
+        defaults.set(url.path, forKey: "codexExecutablePath")
         await refresh()
     }
 

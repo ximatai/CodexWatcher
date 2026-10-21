@@ -34,6 +34,18 @@ final class ResetAttemptStore {
         }
     }
 
+    /// A newly confirmed operation must not silently adopt another instance's retry key.
+    func prepareNew(creditID: String, owner: String) throws -> PendingRedemption? {
+        try withLock {
+            var entries = try all()
+            guard entries[owner] == nil else { return nil }
+            let attempt = PendingRedemption(creditID: creditID, idempotencyKey: UUID().uuidString)
+            entries[owner] = attempt
+            try write(entries)
+            return attempt
+        }
+    }
+
     private func withLock<T>(_ body: () throws -> T) throws -> T {
         try FileManager.default.createDirectory(at: file.deletingLastPathComponent(),
                                                withIntermediateDirectories: true,

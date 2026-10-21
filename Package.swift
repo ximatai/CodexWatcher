@@ -7,8 +7,8 @@ let package = Package(
     platforms: [.macOS(.v14)],
     targets: [
         .target(name: "WatcherCore", path: "CodexWatcher",
-                exclude: ["MyApp.swift", "ContentView.swift", "UsageMonitor.swift", "Assets.xcassets"],
-                sources: ["UsageModels.swift", "AppServerClient.swift", "ResetAttemptStore.swift", "PresentationFormat.swift"],
+                exclude: ["MyApp.swift", "ContentView.swift", "PrivacyMask.swift", "MenuBarSettingsView.swift", "ResetConfirmationView.swift", "ResetConfirmationContent.swift", "StatusBarController.swift", "Assets.xcassets"],
+                sources: ["UsageModels.swift", "UsageMonitor.swift", "AppServerClient.swift", "ResetAttemptStore.swift", "PresentationFormat.swift", "MenuBarLabelRenderer.swift", "MenuBarConfiguration.swift", "AppTheme.swift"],
                 resources: [.process("en.lproj"), .process("zh-Hans.lproj")]),
         .testTarget(name: "WatcherCoreTests", dependencies: ["WatcherCore"], path: "Tests")
     ],

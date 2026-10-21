@@ -108,3 +108,14 @@ struct PendingRedemption: Codable {
     let creditID: String
     let idempotencyKey: String
 }
+
+/// The operation the user opened, independent of subsequent account/store refreshes.
+struct ResetConfirmation: Identifiable {
+    let id = UUID()
+    let accountKey: String
+    let email: String?
+    let creditID: String
+    let credit: ResetCredit?
+    let windowID: String?
+    let retry: PendingRedemption?
+}
