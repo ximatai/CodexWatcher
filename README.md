@@ -6,7 +6,7 @@
 
 A native macOS menu bar app for tracking Codex usage, quota pace, and reset cards.
 
-> 独立第三方开源项目，与 OpenAI 无隶属关系。目前为源码预览版，尚无签名、公证的安装包；真实重置操作未验收。
+> 独立第三方开源项目，与 OpenAI 无隶属关系。目前为预览版，正式安装包尚未公开发布；真实重置操作未验收。
 
 ## 界面预览
 
@@ -56,7 +56,7 @@ open CodexWatcher.xcodeproj
 
 - [使用指南](docs/USAGE.md)：用量口径、设置、重置确认与重试。
 - [开发与接入](docs/DEVELOPMENT.md)：构建、测试、依赖及认证适用范围。
-- [发布流程](docs/RELEASING.md)：CI 签名、公证及 Release 草稿；待配置发布凭据。
+- [发布流程](docs/RELEASING.md)：CI 签名、公证、打包及 Release 草稿。
 - [图标素材](docs/design/README.md)：1024 方形原稿、macOS 图标及生成方式。
 - [界面预览素材](docs/images/README.md)：演示数据与重新生成方式。
 - [贡献指南](CONTRIBUTING.md) · [架构](docs/ARCHITECTURE.md) · [安全与隐私](SECURITY.md) · [更新记录](CHANGELOG.md)

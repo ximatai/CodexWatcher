@@ -4,7 +4,7 @@
 
 GitHub Actions 负责构建 Universal 应用、Developer ID 签名、Apple 公证、生成 DMG/ZIP 及 Release 草稿。不需要自建下载服务器；正式发布由维护者验收后操作。
 
-目前工作流已配置，但缺少发布凭据，尚未完成签名、公证及远程发布验收。普通 CI 的无签名构建不能作为正式安装包。
+2026-10-21，`v0.2.0` 已通过[首次完整发布工作流](https://github.com/ximatai/CodexWatcher/actions/runs/39575378778)，生成签名、公证后的 DMG、ZIP 和校验文件，当前保留为 Release 草稿。本机已核对 SHA-256、应用和 DMG 签名、公证票据及应用 Gatekeeper 检查；安装后的功能验收与正式公开发布仍需维护者完成。普通 CI 的无签名构建不能作为正式安装包。
 
 ## 一次性准备
 

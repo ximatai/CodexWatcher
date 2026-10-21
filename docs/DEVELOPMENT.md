@@ -18,9 +18,9 @@ xcodebuild -project CodexWatcher.xcodeproj -scheme CodexWatcher \
 open build/Build/Products/Release/CodexWatcher.app
 ```
 
-仓库不包含开发者签名团队设置。正式发行仍需准备自己的签名、公证和交付流程；当前无安装包或自动更新。
+仓库不包含开发者签名团队设置。自行发行需配置自己的签名与公证凭据。
 
-已补充独立的 CI 发布草稿工作流，配置及凭据要求见[发布流程](RELEASING.md)。它与普通的无签名构建检查分开，目前尚未完成远程签名、公证验收。
+独立的 CI 发布工作流已完成签名、公证和 DMG/ZIP 打包验证，目前仅生成 Release 草稿，尚未公开安装包，也不提供自动更新。配置及凭据要求见[发布流程](RELEASING.md)。
 
 「登录时启动」通过 [SMAppService.mainApp](https://developer.apple.com/documentation/servicemanagement/smappservice) 管理，需要正确的代码签名。上述无签名命令仅用于编译验证，不代表登录项注册已验收。相关单元测试使用注入的假服务，不修改开发机器的登录项。
 
