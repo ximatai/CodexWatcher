@@ -8,6 +8,17 @@ A native macOS menu bar app for tracking Codex usage, quota pace, and reset card
 
 > 独立第三方开源项目，与 OpenAI 无隶属关系。目前为预览版；真实重置操作未验收。
 
+## 下载与安装
+
+**[下载最新版（DMG / ZIP）](https://github.com/ximatai/CodexWatcher/releases/latest)** · [全部版本与更新说明](https://github.com/ximatai/CodexWatcher/releases)
+
+支持 **macOS 14+**，提供 **Universal 安装包（Apple Silicon + Intel）**，已通过 Developer ID 签名和 Apple 公证。Intel 尚未经真机验证。
+
+1. 打开最新版下载页，在 **Assets** 中选择 `.dmg`，打开后将 CodexWatcher 拖入 Applications；也可下载 `.zip`，解压后移动应用。
+2. 单独安装 [Codex CLI](https://learn.chatgpt.com/docs/app-server)，打开应用，点击「使用 ChatGPT 连接」登录。
+
+校验文件为 `SHA256SUMS.txt`；GitHub 自动生成的 `Source code` 压缩包不包含可直接运行的应用。
+
 ## 界面预览
 
 <p>
@@ -27,10 +38,6 @@ A native macOS menu bar app for tracking Codex usage, quota pace, and reset card
 - 可隐藏邮箱；凭证由本机 Codex CLI 的系统钥匙串存储管理。
 
 每 5 分钟读取用量，打开面板及系统唤醒等事件也会触发刷新。应用不发起模型推理、不读取聊天内容，也不使用开发者自建后端。
-
-## 安装
-
-从 [GitHub Releases](https://github.com/ximatai/CodexWatcher/releases/latest) 下载 DMG，将应用拖入 Applications。支持 macOS 14+、Apple Silicon 和 Intel；应用已签名、公证，仍需单独安装 Codex CLI。Intel 尚未经真机验证。
 
 ## 从源码运行
 
