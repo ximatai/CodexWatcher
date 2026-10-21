@@ -47,6 +47,12 @@ jobs:
             test "$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")" = "$(git rev-parse HEAD)"
           fi
           xcodebuild -version
+      - name: Test release notes validation
+        run: python3 -m unittest discover -s scripts/tests -v
+      - name: Validate changelog and generate release notes
+        run: |
+          python3 scripts/generate-release-notes.py "$RELEASE_TAG" "$RUNNER_TEMP/release-notes.md" \
+            --repository "$GITHUB_REPOSITORY" --revision "$GITHUB_SHA"
       - name: Check release credentials exist
         env:
           MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
@@ -88,19 +94,6 @@ jobs:
         shell: bash
         run: |
           output="$RUNNER_TEMP/distribution"
-          cat > "$RUNNER_TEMP/release-notes.md" <<'NOTES'
-          Native macOS menu bar app for Codex usage, quota pace and reset cards.
-
-          - Requires macOS 14 or later. Universal app: Apple Silicon + Intel.
-          - Install Codex CLI separately, then connect your ChatGPT account in the app.
-          - DMG: drag CodexWatcher into Applications. ZIP: extract and move the app to Applications.
-          - Developer ID signed and Apple notarized. Checksums are in SHA256SUMS.txt.
-          - Third-party project, not affiliated with OpenAI. Available fields depend on your account.
-          - Real reset consumption has not been validated. Reset actions consume cards and cannot be undone.
-
-          CI 已验证安装包完整性、签名、公证及隔离启动；不使用真实账号或消费重置卡。
-          Intel 二进制已构建，但仍需 Intel 设备实测。详细变更见仓库 CHANGELOG.md。
-          NOTES
           assets=("$output/CodexWatcher-$RELEASE_TAG-universal.dmg" "$output/CodexWatcher-$RELEASE_TAG-universal.zip" "$output/SHA256SUMS.txt")
           if gh release view "$RELEASE_TAG" --json isDraft,targetCommitish > "$RUNNER_TEMP/draft-release.json" 2>/dev/null; then
             test "$(jq -r .isDraft "$RUNNER_TEMP/draft-release.json")" = true || { echo 'Refusing to overwrite a published release.' >&2; exit 1; }

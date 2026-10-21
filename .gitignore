@@ -19,3 +19,4 @@ dist/
 *.p12
 *.p8
 *.keychain-db
+__pycache__/
