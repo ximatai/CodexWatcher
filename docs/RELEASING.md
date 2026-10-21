@@ -50,7 +50,7 @@ base64 -i AuthKey_EXAMPLE.p8 | pbcopy
 
 每次只执行一条并保存对应 Secret，避免后一次覆盖剪贴板。Base64 不是加密；不要把结果、证书、私钥或密码发到 Issue、聊天、日志或 Git 仓库。
 
-建议限制 `release` 环境仅允许 `main` 分支及受控的 `v*` 标签，并按团队需要配置审批。发布凭据只在凭据检查及签名步骤中注入，不提供给普通 PR 工作流。工作流将证书导入临时钥匙串，结束时删除钥匙串和临时私钥文件。[GitHub 官方签名指南](https://docs.github.com/en/actions/how-tos/deploy/deploy-to-third-party-platforms/sign-xcode-applications)
+建议限制 `release` 环境仅允许 `main` 分支及受控的 `v*` 标签，自动发布模式不设置必需人工审批。发布凭据只在凭据检查及签名步骤中注入，不提供给普通 PR 工作流。工作流将证书导入临时钥匙串，结束时删除钥匙串和临时私钥文件。[GitHub 官方签名指南](https://docs.github.com/en/actions/how-tos/deploy/deploy-to-third-party-platforms/sign-xcode-applications)
 
 ## 自动发布
 
@@ -68,43 +68,6 @@ git push origin v0.2.1
 仅接受版本标签；标签提交必须属于 `main` 历史。任何门禁失败都会阻止公开发布；文件先上传到草稿，全部上传成功后才公开。已发布版本不会覆盖，修复应使用新版本号。手动创建的草稿在标签尚未落地时，必须继续对应原提交。
 
 发布环境不能设置必需人工审批，否则标签发布仍会等待审批。应限制为 `main` 和受控 `v*` 标签，并限制有权推送这些标签的维护者。
-
-工作流使用具备公证权限的 **App Store Connect 团队 API 密钥**，需要 `.p8` 私钥、Key ID 和 Issuer ID。它用于 Apple 公证，不会将应用提交到 Mac App Store。个人 API 密钥的参数形式不同，当前脚本未使用该方式。
-
-另外准备签名证书所属团队的 Team ID。不要把个人开发身份括号中的 ID 直接当作 Team ID。
-
-### 3. GitHub Secrets
-
-仓库 Settings → Environments 中创建 `release` 环境，并设置以下 Secrets。仓库或组织级同名 Secrets 也可以使用；环境级配置便于独立控制发布权限。
-
-| Secret | 内容 |
-| --- | --- |
-| `MACOS_CERTIFICATE_P12_BASE64` | 含证书及私钥的 P12，Base64 编码 |
-| `MACOS_CERTIFICATE_PASSWORD` | P12 导出密码 |
-| `APPLE_TEAM_ID` | 签名证书所属团队的 Team ID |
-| `NOTARY_KEY_P8_BASE64` | 团队公证 API 私钥 P8，Base64 编码 |
-| `NOTARY_KEY_ID` | 对应 Key ID |
-| `NOTARY_ISSUER_ID` | 对应 Issuer ID |
-
-例如在本机将编码结果复制到剪贴板，再粘贴到 Secret 输入框：
-
-```sh
-base64 -i DeveloperID.p12 | pbcopy
-base64 -i AuthKey_EXAMPLE.p8 | pbcopy
-```
-
-每次只执行一条并保存对应 Secret，避免后一次覆盖剪贴板。Base64 不是加密；不要把结果、证书、私钥或密码发到 Issue、聊天、日志或 Git 仓库。
-
-建议限制 `release` 环境仅允许 `main` 分支及受控的 `v*` 标签，并按团队需要配置审批。发布凭据只在凭据检查及签名步骤中注入，不提供给普通 PR 工作流。工作流将证书导入临时钥匙串，结束时删除钥匙串和临时私钥文件。[GitHub 官方签名指南](https://docs.github.com/en/actions/how-tos/deploy/deploy-to-third-party-platforms/sign-xcode-applications)
-
-## 触发草稿
-
-将改动合入并推送至 `main` 后，可二选一：
-
-- Actions → Release draft → Run workflow，分支选 `main`，输入版本如 `v0.2.0`。
-- 在 `main` 的提交上创建并推送版本标签，如 `v0.2.0` 或 `v0.2.0-beta.1`。
-
-仅接受版本标签，不接受任意路径或 shell 内容；已有标签必须指向当前构建提交，提交必须属于 `main` 历史。未公开的草稿可以重跑上传；已正式发布的版本不会被覆盖。手动创建的草稿在标签尚未落地时，也必须继续对应原提交。
 
 工作流使用 `xcode-27` macOS runner 和 Xcode 27.1，当前 runner 标签处于 GitHub 公共预览阶段；工具链变动时需要维护。它会：
 
