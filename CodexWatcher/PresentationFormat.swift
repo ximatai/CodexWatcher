@@ -1,9 +1,35 @@
 import Foundation
 
+enum CreditExpiryUrgency {
+    case withinThreeDays, tomorrow, today
+
+    var title: String {
+        switch self {
+        case .withinThreeDays: return "三天内"
+        case .tomorrow: return "明日到期"
+        case .today: return "今日到期"
+        }
+    }
+}
+
 /// Keep server values unchanged; adapt only their presentation to system preferences.
 struct PresentationFormat {
     var locale: Locale = .autoupdatingCurrent
     var timeZone: TimeZone = .autoupdatingCurrent
+
+    func creditExpiryUrgency(_ expiry: Date?, at now: Date) -> CreditExpiryUrgency? {
+        guard let expiry, expiry > now else { return nil }
+        var calendar = Calendar.autoupdatingCurrent
+        calendar.locale = locale
+        calendar.timeZone = timeZone
+        if calendar.isDate(expiry, inSameDayAs: now) { return .today }
+        if let tomorrow = calendar.date(byAdding: .day, value: 1, to: now),
+           calendar.isDate(expiry, inSameDayAs: tomorrow) { return .tomorrow }
+        if let cutoff = calendar.date(byAdding: .day, value: 3, to: now), expiry <= cutoff {
+            return .withinThreeDays
+        }
+        return nil
+    }
 
     private func text(_ key: String) -> String {
         #if SWIFT_PACKAGE

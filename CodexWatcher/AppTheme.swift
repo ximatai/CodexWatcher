@@ -36,5 +36,13 @@ struct AppPalette {
     var warning: Color { dark ? Color(red: 1, green: 0.75, blue: 0.36) : Color(red: 0.74, green: 0.36, blue: 0.04) }
     var separator: Color { Color.primary.opacity(dark ? 0.10 : 0.08) }
     var track: Color { dark ? Color(red: 0.19, green: 0.22, blue: 0.26) : Color(red: 0.90, green: 0.92, blue: 0.94) }
-    var urgentSurface: Color { warning.opacity(dark ? 0.075 : 0.055) }
+    func creditExpiryColor(_ urgency: CreditExpiryUrgency) -> Color {
+        switch urgency {
+        case .withinThreeDays:
+            return dark ? Color(red: 0.48, green: 0.73, blue: 1) : Color(red: 0.12, green: 0.38, blue: 0.72)
+        case .tomorrow: return warning
+        case .today:
+            return dark ? Color(red: 1, green: 0.48, blue: 0.48) : Color(red: 0.76, green: 0.18, blue: 0.22)
+        }
+    }
 }

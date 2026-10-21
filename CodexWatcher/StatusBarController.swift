@@ -121,6 +121,14 @@ final class StatusBarController: NSObject {
         appearance.submenu = submenu
         menu.addItem(appearance)
         menu.addItem(.separator())
+        let loginItem = LoginItemController.shared
+        loginItem.refresh()
+        let startup = add(loginItem.title, #selector(toggleLoginItem))
+        startup.state = loginItem.needsApproval ? .mixed : (loginItem.isRequested ? .on : .off)
+        if loginItem.needsApproval {
+            _ = add("在系统设置中允许…", #selector(openLoginItemSettings))
+        }
+        menu.addItem(.separator())
         _ = add("打开独立窗口", #selector(showDashboard))
         add("选择 Codex CLI…", #selector(chooseExecutable)).isEnabled = !monitor.isBusy && monitor.loginID == nil
         if monitor.account != nil {
@@ -149,6 +157,12 @@ final class StatusBarController: NSObject {
     }
 
     @objc private func showDashboard() { openDashboard() }
+    @objc private func toggleLoginItem() {
+        let controller = LoginItemController.shared
+        controller.refresh()
+        controller.requestEnabled(!controller.isRequested)
+    }
+    @objc private func openLoginItemSettings() { LoginItemController.shared.openSystemSettings() }
     @objc private func chooseExecutable() { Task { await monitor.chooseExecutable() } }
     @objc private func logout() { Task { await monitor.logout() } }
     @objc private func quit() { NSApp.terminate(nil) }

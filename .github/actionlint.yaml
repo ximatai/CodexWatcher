@@ -1,0 +1,5 @@
+# GitHub-hosted public-preview label, not yet in actionlint's built-in label list.
+# This validation override does not change workflow runner selection.
+self-hosted-runner:
+  labels:
+    - xcode-27

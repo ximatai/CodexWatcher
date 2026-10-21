@@ -9,6 +9,7 @@
 | `ContentView.swift` | 用量面板、重置确认、登录与设置入口 |
 | `ResetConfirmationView.swift` / `ResetConfirmationContent.swift` | 确认页实时状态校验与分组展示；纯展示组件可用模拟数据预览 |
 | `AppTheme.swift` | 亮色 / 暗色语义配色与跟随系统的外观模式 |
+| `LoginItemController.swift` | 通过 SMAppService 管理登录项，展示系统状态及待批准状态 |
 | `MenuBarLabelRenderer.swift` | 将图标与用量合成模板图，按 1x / 2x 可见像素对齐 |
 | `MenuBarConfiguration.swift` / `MenuBarSettingsView.swift` | 图标和文本组合规则、配置与预览 |
 | `UsageMonitor.swift` | 主线程状态、5 分钟轮询、登录事件、重置编排 |
@@ -38,7 +39,7 @@
 1. 用户选择卡片，展示账号、当前窗口用量、数据更新时间、完整到期时间和不可撤销提示。
 2. 用户明确确认；数据失效或卡片不可用时禁用新的重置。
 3. 再读取账号和卡片，核对账号身份以及所选卡片，阻止使用过期快照。
-4. 在文件锁内创建或读取待确认操作，原子写入卡片 ID 与 UUID。存在其他卡片的未决操作时先阻止并要求核实。
+4. 新操作在文件锁内仅创建自己的待确认记录，原子写入卡片 ID 与 UUID；已有任何未决操作时拒绝创建。重试必须继续匹配原账号、卡片和幂等键。
 5. 调用 `account/rateLimitResetCredit/consume`。同一次操作的所有重试复用幂等键。
 6. 明确结果后仅清除匹配该键的本地操作，再读取用量。迟到的旧结果不能清掉更新的记录。
 

@@ -24,13 +24,25 @@ final class WatcherAppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusController = StatusBarController(monitor: monitor) { [weak self] in self?.showDashboard() }
-        showDashboard()
+        let event = NSAppleEventManager.shared().currentAppleEvent
+        let launchedAtLogin = event?.eventID == kAEOpenApplication
+            && event?.paramDescriptor(forKeyword: keyAEPropData)?.enumCodeValue == keyAELaunchedAsLogInItem
+        if !launchedAtLogin { showDashboard() }
         clockTimer = Timer.scheduledTimer(timeInterval: 30, target: self,
                                          selector: #selector(updateClock), userInfo: nil, repeats: true)
         Task { await monitor.start() }
     }
 
     @objc private func updateClock() { monitor.updateClock() }
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+        LoginItemController.shared.refresh()
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        showDashboard()
+        return true
+    }
 
     private func showDashboard() {
         statusController?.closePopover()

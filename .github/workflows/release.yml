@@ -1,0 +1,108 @@
+name: Release draft
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag, e.g. v0.2.0 or v0.2.0-beta.1'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.version || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.event_name == 'push' || github.ref == 'refs/heads/main'
+    runs-on: xcode-27
+    environment: release
+    timeout-minutes: 90
+    permissions:
+      contents: write
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+      RELEASE_TAG: ${{ inputs.version || github.ref_name }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate version and source
+        shell: bash
+        run: |
+          source scripts/release-common.sh
+          validate_release_tag "$RELEASE_TAG"
+          git merge-base --is-ancestor HEAD origin/main
+          if git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"; then
+            test "$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")" = "$(git rev-parse HEAD)"
+          fi
+          xcodebuild -version
+      - name: Check release credentials exist
+        env:
+          MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          NOTARY_KEY_P8_BASE64: ${{ secrets.NOTARY_KEY_P8_BASE64 }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+        shell: bash
+        run: |
+          for name in MACOS_CERTIFICATE_P12_BASE64 MACOS_CERTIFICATE_PASSWORD APPLE_TEAM_ID NOTARY_KEY_P8_BASE64 NOTARY_KEY_ID NOTARY_ISSUER_ID; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error::Missing release secret: $name (see docs/RELEASING.md)"
+              exit 1
+            fi
+          done
+      - name: Run offline tests
+        run: swift test
+      - name: Build Universal application
+        run: bash scripts/build-release.sh "$RELEASE_TAG" "$RUNNER_TEMP/distribution"
+      - name: Sign, notarize and package
+        env:
+          MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          NOTARY_KEY_P8_BASE64: ${{ secrets.NOTARY_KEY_P8_BASE64 }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+        run: bash scripts/notarize-release.sh "$RELEASE_TAG" "$RUNNER_TEMP/distribution"
+      - name: Create or update draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          output="$RUNNER_TEMP/distribution"
+          cat > "$RUNNER_TEMP/release-notes.md" <<'NOTES'
+          Native macOS menu bar app for Codex usage, quota pace and reset cards.
+
+          - Requires macOS 14 or later. Universal app: Apple Silicon + Intel.
+          - Install Codex CLI separately, then connect your ChatGPT account in the app.
+          - DMG: drag CodexWatcher into Applications. ZIP: extract and move the app to Applications.
+          - Developer ID signed and Apple notarized. Checksums are in SHA256SUMS.txt.
+          - Third-party project, not affiliated with OpenAI. Available fields depend on your account.
+          - Real reset consumption has not been validated. Reset actions consume cards and cannot be undone.
+
+          发布前请验收安装、登录、用量显示及登录启动；不要消费真实重置卡。
+          Intel 二进制已构建，但仍需 Intel 设备实测。详细变更见仓库 CHANGELOG.md。
+          NOTES
+          assets=("$output/CodexWatcher-$RELEASE_TAG-universal.dmg" "$output/CodexWatcher-$RELEASE_TAG-universal.zip" "$output/SHA256SUMS.txt")
+          if gh release view "$RELEASE_TAG" --json isDraft,targetCommitish > "$RUNNER_TEMP/draft-release.json" 2>/dev/null; then
+            test "$(jq -r .isDraft "$RUNNER_TEMP/draft-release.json")" = true || { echo 'Refusing to overwrite a published release.' >&2; exit 1; }
+            if ! git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"; then
+              test "$(jq -r .targetCommitish "$RUNNER_TEMP/draft-release.json")" = "$(git rev-parse HEAD)" || { echo 'Draft targets a different source commit.' >&2; exit 1; }
+            fi
+            gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
+            gh release edit "$RELEASE_TAG" --notes-file "$RUNNER_TEMP/release-notes.md"
+          else
+            flags=()
+            if [[ "$RELEASE_TAG" == *-* ]]; then flags+=(--prerelease); fi
+            gh release create "$RELEASE_TAG" "${assets[@]}" --draft "${flags[@]}" \
+              --target "$(git rev-parse HEAD)" --title "CodexWatcher $RELEASE_TAG" --notes-file "$RUNNER_TEMP/release-notes.md"
+          fi

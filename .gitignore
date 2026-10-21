@@ -15,3 +15,7 @@ auth.json
 pending-resets.json
 *.log
 Local.xcconfig
+dist/
+*.p12
+*.p8
+*.keychain-db

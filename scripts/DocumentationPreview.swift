@@ -1,0 +1,118 @@
+import AppKit
+import SwiftUI
+
+// Documentation-only executable. All account data comes from an isolated local
+// fake process that rejects every method except initialization and reads.
+@main
+struct DocumentationPreview {
+    @MainActor static func main() async throws {
+        let arguments = CommandLine.arguments
+        guard arguments.count == 2 else { fatalError("Pass the screenshot output directory") }
+        let output = URL(fileURLWithPath: arguments[1], isDirectory: true)
+        try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+        let app = NSApplication.shared
+        app.setActivationPolicy(.prohibited)
+        let temporary = FileManager.default.temporaryDirectory.appendingPathComponent("WatcherDocs-\(UUID())")
+        try FileManager.default.createDirectory(at: temporary, withIntermediateDirectories: true)
+        let suite = "WatcherDocs-\(UUID())"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer {
+            defaults.removePersistentDomain(forName: suite)
+            try? FileManager.default.removeItem(at: temporary)
+        }
+        defaults.set(false, forKey: "privacyMode")
+        let executable = temporary.appendingPathComponent("fake-codex")
+        let script = #"""
+        #!/bin/sh
+        fixture_dir=$(/usr/bin/dirname "$0")
+        while IFS= read -r line; do
+          id=$(printf '%s' "$line" | /usr/bin/sed -n 's/.*"id":\([0-9][0-9]*\).*/\1/p')
+          case "$line" in
+            *initialized*) continue ;;
+            *initialize*) result='{}' ;;
+            *account*rateLimits*read*) result=$(/bin/cat "$fixture_dir/usage.json") ;;
+            *account*read*) result='{"account":{"type":"chatgpt","email":"demo@example.com","planType":"pro"}}' ;;
+            *) printf '{"id":%s,"error":{"code":-32601}}\n' "$id"; continue ;;
+          esac
+          printf '{"id":%s,"result":%s}\n' "$id" "$result"
+        done
+        """#
+        try Data(script.utf8).write(to: executable)
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: executable.path)
+        let now = Date().timeIntervalSince1970
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Shanghai")!
+        let midnight = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: Date()))!
+        let todayExpiry = (now + midnight.timeIntervalSince1970) / 2
+        let quota = QuotaWindow(usedPercent: 35, windowDurationMins: 10080, resetsAt: now + 10080 * 60 * 0.72)
+        let credits = ResetCredits(availableCount: 3, credits: [
+            .init(id: "demo-card-1", resetType: "codexRateLimits", status: "available",
+                  grantedAt: now - 86400, expiresAt: todayExpiry, title: "Full reset", description: nil),
+            .init(id: "demo-card-2", resetType: "codexRateLimits", status: "available",
+                  grantedAt: now - 86400, expiresAt: midnight.timeIntervalSince1970 + 43200, title: "Full reset", description: nil),
+            .init(id: "demo-card-3", resetType: "codexRateLimits", status: "available",
+                  grantedAt: now - 86400, expiresAt: now + 2 * 86400, title: "Full reset", description: nil)
+        ])
+        let bucket = LimitBucket(limitId: "codex", limitName: "Codex", planType: "pro", primary: quota, secondary: nil)
+        let snapshot = UsageSnapshot(accountId: "documentation-demo", rateLimits: bucket,
+                                     rateLimitsByLimitId: nil, rateLimitResetCredits: credits)
+        try JSONEncoder().encode(snapshot).write(to: temporary.appendingPathComponent("usage.json"))
+        let client = AppServerClient(executablePath: executable.path,
+                                     runtimeDirectory: temporary.appendingPathComponent("Runtime"))
+        let monitor = UsageMonitor(client: client, defaults: defaults)
+        defer { monitor.shutdown() }
+        await monitor.refresh()
+        guard monitor.account?.email == "demo@example.com", monitor.snapshot != nil else {
+            fatalError("Demo fixture failed to load")
+        }
+        for dark in [false, true] {
+            defaults.set(dark ? "dark" : "light", forKey: "appearance")
+            try await render(ContentView(monitor: monitor).defaultAppStorage(defaults),
+                             size: NSSize(width: 390, height: 660), dark: dark,
+                             to: output.appendingPathComponent(dark ? "dashboard-dark.png" : "dashboard-light.png"))
+        }
+        defaults.set("light", forKey: "appearance")
+        try await render(MenuBarSettingsView(monitor: monitor).defaultAppStorage(defaults),
+                         size: NSSize(width: 420, height: 365), dark: false,
+                         to: output.appendingPathComponent("menu-bar-settings.png"))
+        let format = PresentationFormat(locale: Locale(identifier: "zh_CN"), timeZone: TimeZone(identifier: "Asia/Shanghai")!)
+        try await render(ResetConfirmationContent(isRetry: false, cardTitle: "完整额度重置卡",
+                         account: "demo@example.com", quotaTitle: "7天额度", usage: "已用 35% · 剩余 65%",
+                         expiry: format.date(Date(timeIntervalSince1970: todayExpiry), precise: true),
+                         updated: format.date(Date(), timeOnly: true), blockingReason: nil, canConfirm: true,
+                         cancel: {}, confirm: {}), size: NSSize(width: 370, height: 316), dark: false,
+                         to: output.appendingPathComponent("reset-confirmation.png"))
+        print("Exported four previews with fictional data; no real account or reset was used.")
+    }
+
+    @MainActor static func render<V: View>(_ view: V, size: NSSize, dark: Bool, to url: URL) async throws {
+        let appearance = NSAppearance(named: dark ? .darkAqua : .aqua)!
+        NSApplication.shared.appearance = appearance
+        let hosting = NSHostingView(rootView: view
+            .environment(\.locale, Locale(identifier: "zh_CN"))
+            .environment(\.timeZone, TimeZone(identifier: "Asia/Shanghai")!)
+            .preferredColorScheme(dark ? .dark : .light)
+            .frame(width: size.width, height: size.height)
+            .background(AppPalette(dark: dark).background))
+        let window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.borderless],
+                              backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.appearance = appearance
+        window.contentView = hosting
+        hosting.frame = NSRect(origin: .zero, size: size)
+        hosting.layoutSubtreeIfNeeded()
+        try await Task.sleep(for: .milliseconds(250))
+        hosting.layoutSubtreeIfNeeded()
+        let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(size.width * 2),
+                                      pixelsHigh: Int(size.height * 2), bitsPerSample: 8, samplesPerPixel: 4,
+                                      hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
+                                      bytesPerRow: 0, bitsPerPixel: 0)!
+        bitmap.size = size
+        hosting.cacheDisplay(in: hosting.bounds, to: bitmap)
+        guard let png = bitmap.representation(using: .png, properties: [:]) else {
+            fatalError("Unable to render \(url.lastPathComponent)")
+        }
+        try png.write(to: url, options: .atomic)
+        window.close()
+    }
+}

@@ -27,6 +27,7 @@ private struct DashboardContent: View {
     let openDashboard: () -> Void
     @State private var resetConfirmation: ResetConfirmation?
     @State private var showingMenuBarSettings = false
+    private let loginItem = LoginItemController.shared
     private var format: PresentationFormat { PresentationFormat(locale: locale, timeZone: timeZone) }
     private var palette: AppPalette { AppPalette(dark: colorScheme == .dark) }
 
@@ -90,12 +91,11 @@ private struct DashboardContent: View {
 
     private var header: some View {
         HStack(spacing: 12) {
-            Image(systemName: "gauge.with.dots.needle.50percent")
-                .font(.system(size: 20, weight: .medium))
-                .foregroundStyle(palette.accent)
+            Image("AppBrand")
+                .resizable()
+                .interpolation(.high)
                 .frame(width: 42, height: 42)
-                .background(palette.surface, in: RoundedRectangle(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(palette.separator))
+                .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 5) {
                 Text("Codex Watcher").font(.system(size: 19, weight: .semibold))
@@ -273,34 +273,32 @@ private struct DashboardContent: View {
     }
 
     private func creditRow(_ credit: ResetCredit, date: Date) -> some View {
-        let urgent = credit.expiryDate.map {
-            let remaining = $0.timeIntervalSince(date)
-            return remaining > 0 && remaining < 3 * 86400
-        } ?? false
+        let urgency = format.creditExpiryUrgency(credit.expiryDate, at: date)
         return HStack(spacing: 10) {
             ResetTicketShape()
                 .stroke(style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round))
                 .frame(width: 21, height: 15)
                 .rotationEffect(.degrees(-18))
-                .foregroundStyle(urgent ? palette.warning : .secondary)
+                .foregroundStyle(.secondary)
                 .frame(width: 26, height: 28)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 5) {
                     Text(format.creditTitle(credit.title)).font(.system(size: 12, weight: .medium))
                         .lineLimit(1)
-                    if urgent {
-                        Text("即将到期")
+                    if let urgency {
+                        let color = palette.creditExpiryColor(urgency)
+                        Text(urgency.title)
                             .font(.system(size: 8, weight: .medium))
-                            .foregroundStyle(palette.warning)
+                            .foregroundStyle(color)
                             .padding(.horizontal, 5).padding(.vertical, 2)
-                            .background(palette.warning.opacity(0.12), in: Capsule())
+                            .background(color.opacity(0.12), in: Capsule())
                             .fixedSize()
                     }
                 }
                 if let expiry = credit.expiryDate {
                     Text(expiry > date ? "\(format.date(expiry)) 到期" : "已到期，等待刷新")
-                        .foregroundStyle(urgent ? palette.warning : .secondary)
+                        .foregroundStyle(.secondary)
                         .help(format.date(expiry, precise: true))
                 } else { Text("有效期未提供").foregroundStyle(.secondary) }
             }.font(.system(size: 10)).frame(maxWidth: .infinity, alignment: .leading)
@@ -313,7 +311,6 @@ private struct DashboardContent: View {
                 .help("查看当前用量与卡片有效期，确认后使用")
         }
         .padding(.horizontal, 12).padding(.vertical, 10)
-        .background(urgent ? palette.urgentSurface : Color.clear)
     }
 
     private func statusMessage(_ text: String, symbol: String, color: Color) -> some View {
@@ -339,6 +336,12 @@ private struct DashboardContent: View {
                         ForEach(AppAppearance.allCases) { option in
                             Text(option.title).tag(option.rawValue)
                         }
+                    }
+                    Divider()
+                    Toggle(loginItem.title, isOn: Binding(
+                        get: { loginItem.isRequested }, set: { loginItem.requestEnabled($0) }))
+                    if loginItem.needsApproval {
+                        Button("在系统设置中允许…") { loginItem.openSystemSettings() }
                     }
                     Divider()
                     Button("打开独立窗口", action: openDashboard)
