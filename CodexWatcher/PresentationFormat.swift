@@ -12,7 +12,12 @@ struct PresentationFormat {
         let resources = Bundle.main
         #endif
         let language = locale.language.languageCode?.identifier == "zh" ? "zh-Hans" : "en"
-        let bundle = resources.path(forResource: language, ofType: "lproj")
+        // Classic SwiftPM normalizes directory names (zh-hans); Xcode preserves zh-Hans.
+        // Resolve the actual bundle localization instead of relying on filesystem case folding.
+        let localization = resources.localizations.first {
+            $0.caseInsensitiveCompare(language) == .orderedSame
+        } ?? language
+        let bundle = resources.path(forResource: localization, ofType: "lproj")
             .flatMap(Bundle.init(path:)) ?? resources
         return bundle.localizedString(forKey: key, value: key, table: nil)
     }
