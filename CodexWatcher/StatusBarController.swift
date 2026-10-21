@@ -232,7 +232,7 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
         dismissalState.reset()
     }
 
-    /// Runs only with the isolated CLI fixture. Opens the actual SwiftUI gear menu;
+    /// Runs only with the isolated CLI fixture. Opens the actual native gear control;
     /// cancellation selects no item. External interactions are injected into the same handlers.
     func verifyPopoverForSmokeTest() async -> Bool {
         guard CommandLine.arguments.contains("--release-smoke-test") else { return fail(#line) }
@@ -251,25 +251,27 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
             }
             return condition()
         }
-        func settingsButton(in element: any NSAccessibilityProtocol, depth: Int = 0) -> (any NSAccessibilityProtocol)? {
-            guard depth < 30 else { return nil }
-            if element.accessibilityIdentifier() == "dashboard-settings" { return element }
-            for child in element.accessibilityChildren() ?? [] {
-                if let child = child as? any NSAccessibilityProtocol,
-                   let found = settingsButton(in: child, depth: depth + 1) { return found }
-            }
-            return nil
+        func menuButtons(in view: NSView) -> [NSPopUpButton] {
+            if let button = view as? NSPopUpButton { return [button] }
+            return view.subviews.flatMap { menuButtons(in: $0) }
         }
 
         for cycle in 0..<4 {
             showPopover(clearInitialFocus: true)
-            var gear: (any NSAccessibilityProtocol)?
+            var gear: NSPopUpButton?
             guard await waitFor({
                 guard self.popover.isShown, self.localEventMonitor != nil, !self.monitor.isBusy,
                       let view = self.popover.contentViewController?.view else { return false }
-                gear = settingsButton(in: view)
-                return gear != nil
-            }), let gear else { return fail(#line) }
+                // The one-window fixture has exactly one native menu button: Settings.
+                // SwiftUI's accessibility tree may not exist on a CI desktop without an AX client.
+                let buttons = menuButtons(in: view)
+                gear = buttons.count == 1 ? buttons.first : nil
+                return gear?.isEnabled == true
+            }), let gear else {
+                let count = popover.contentViewController.map { menuButtons(in: $0.view).count } ?? 0
+                FileHandle.standardError.write(Data("Popover readiness: cycle=\(cycle), shown=\(popover.isShown), observing=\(localEventMonitor != nil), busy=\(monitor.isBusy), nativeMenus=\(count)\n".utf8))
+                return fail(#line)
+            }
             @MainActor final class MenuProbe {
                 var sawMenu = false
                 var stayedOpen = false
@@ -279,7 +281,8 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
             let observer = NotificationCenter.default.addObserver(forName: NSMenu.didBeginTrackingNotification,
                 object: nil, queue: .main) { [weak self] notification in
                 MainActor.assumeIsolated {
-                    guard let menu = notification.object as? NSMenu, !probe.sawMenu else { return }
+                    guard let menu = notification.object as? NSMenu, !probe.sawMenu,
+                          menu.items.contains(where: { $0.title == "状态栏显示…" }) else { return }
                     probe.sawMenu = true
                     if cycle == 1 { self?.handleOtherApplicationActivation() }
                     if cycle == 2, let window = self?.popover.contentViewController?.view.window {
@@ -296,9 +299,8 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
                     RunLoop.main.add(timer, forMode: .eventTracking)
                 }
             }
-            // SwiftUI may return false after cancellation even when the menu opened.
-            // Require observed native tracking and visibility instead of that return value.
-            _ = gear.accessibilityPerformPress()
+            // Exercise the actual menu control without requiring an external AX client.
+            gear.performClick(nil)
             let ended = await waitFor({ probe.sawMenu && !self.dismissalState.isTrackingMenu })
             NotificationCenter.default.removeObserver(observer)
             probe.cancellation?.invalidate()
