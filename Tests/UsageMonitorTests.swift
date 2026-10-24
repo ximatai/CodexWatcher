@@ -69,6 +69,7 @@ final class UsageMonitorTests: XCTestCase {
                   if [ -f "$fixture_dir/hang-hello" ]; then continue; fi
                   if [ -f "$fixture_dir/post-hello.json" ]; then /bin/cp "$fixture_dir/post-hello.json" "$fixture_dir/usage.json"; fi
                   printf '{"id":%s,"result":{"turn":{"id":"hello-turn","status":"inProgress"}}}\n' "$id"
+                  if [ -f "$fixture_dir/hold-hello-completion" ]; then continue; fi
                   printf '{"method":"turn/completed","params":{"threadId":"hello-thread","turn":{"id":"hello-turn","status":"completed"}}}\n'
                   continue ;;
                 *account*logout*)
@@ -174,6 +175,20 @@ final class UsageMonitorTests: XCTestCase {
             let authorization = try XCTUnwrap(monitor.makeAutomaticHelloAuthorization(windowID: "codex.primary"))
             monitor.configureAutomaticHello(true, authorization: authorization)
             XCTAssertTrue(monitor.automaticHelloConfiguration.enabled)
+        }
+
+        func waitForRequest(_ method: String) async throws {
+            let deadline = Date().addingTimeInterval(3)
+            while Date() < deadline {
+                if let log = try? String(contentsOf: directory.appendingPathComponent("requests.jsonl"), encoding: .utf8) {
+                    let found = log.split(separator: "\n").contains {
+                        ((try? JSONSerialization.jsonObject(with: Data($0.utf8))) as? [String: Any])?["method"] as? String == method
+                    }
+                    if found { return }
+                }
+                try await Task.sleep(for: .milliseconds(5))
+            }
+            XCTFail("Fixture did not receive \(method)")
         }
 
         func cleanup() {
@@ -320,6 +335,142 @@ final class UsageMonitorTests: XCTestCase {
         await task.value
         XCTAssertFalse(fixture.monitor.automaticHelloConfiguration.enabled)
         XCTAssertTrue(try fixture.helloRequests().isEmpty)
+    }
+
+    func testSlowHelloPreparationAllowsForegroundRefreshAndUsesItsOwnFreshPreflight() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.writeUsage(usedPercent: 0)
+        try await fixture.refresh()
+        try fixture.enableHello()
+        try fixture.marker("delay-hello-prepare")
+        let task = Task { await fixture.monitor.processAutomaticHello() }
+        try await fixture.waitForRequest("thread/start")
+        XCTAssertFalse(fixture.monitor.isBusy)
+        let previousUpdate = fixture.monitor.lastUpdated
+        try fixture.writeUsage(usedPercent: 25)
+        await fixture.monitor.refresh()
+        XCTAssertEqual(fixture.monitor.selectedWindow?.quota.usedPercent, 25)
+        XCTAssertNotEqual(fixture.monitor.lastUpdated, previousUpdate)
+        await task.value
+        XCTAssertTrue(try fixture.helloRequests().isEmpty, "Fresh preflight must observe the intervening usage")
+    }
+
+    func testManualResetPreemptsHelloPreparationBeforeAnyInference() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.writeUsage(usedPercent: 0)
+        try await fixture.refresh()
+        try fixture.enableHello()
+        try fixture.marker("delay-hello-prepare")
+        let task = Task { await fixture.monitor.processAutomaticHello() }
+        try await fixture.waitForRequest("thread/start")
+        let confirmation = try XCTUnwrap(fixture.monitor.makeResetConfirmation(for: fixture.monitor.sortedCredits.first))
+        await fixture.monitor.redeem(confirmation)
+        await task.value
+        XCTAssertEqual(try fixture.consumeRequests().count, 1)
+        XCTAssertTrue(try fixture.helloRequests().isEmpty)
+    }
+
+    func testWaitingHelloDoesNotBlockRefreshAndLogoutStopsItsSession() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.writeUsage(usedPercent: 0)
+        try await fixture.refresh()
+        try fixture.enableHello()
+        try fixture.marker("hold-hello-completion")
+        let task = Task { await fixture.monitor.processAutomaticHello() }
+        try await fixture.waitForRequest("turn/start")
+        XCTAssertFalse(fixture.monitor.isBusy)
+        XCTAssertTrue(fixture.monitor.isSendingHello)
+        try fixture.writeUsage(usedPercent: 20)
+        await fixture.monitor.refresh()
+        XCTAssertEqual(fixture.monitor.selectedWindow?.quota.usedPercent, 20)
+        await fixture.monitor.logout()
+        await task.value
+        XCTAssertNil(fixture.monitor.account)
+        XCTAssertFalse(fixture.monitor.isSendingHello)
+        let record = try AutomaticHelloStore(directory: fixture.directory.appendingPathComponent("State"))
+            .record(account: "account-a", windowID: "codex.primary")
+        XCTAssertEqual(record?.outcome, "unknown")
+        XCTAssertEqual(try fixture.helloRequests().count, 1)
+    }
+
+    func testExpiringCardRedemptionPreemptsWaitingHello() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.writeUsage(expirySeconds: 800, usedPercent: 0)
+        try await fixture.refresh()
+        try await fixture.enableAutomatic()
+        try fixture.enableHello()
+        try fixture.marker("hold-hello-completion")
+        let task = Task { await fixture.monitor.processAutomaticHello() }
+        try await fixture.waitForRequest("turn/start")
+        XCTAssertFalse(fixture.monitor.isBusy)
+        await fixture.monitor.processExpiringCredits()
+        await task.value
+        XCTAssertEqual(try fixture.consumeRequests().count, 1)
+        XCTAssertEqual(try fixture.helloRequests().count, 1)
+        XCTAssertEqual(fixture.monitor.notice, "重置已完成。")
+        XCTAssertFalse(fixture.monitor.isSendingHello)
+    }
+
+    func testStartupReturnsBeforeBackgroundHelloCompletesAndShutdownStopsIt() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.writeUsage(usedPercent: 0)
+        try await fixture.refresh()
+        try fixture.enableHello()
+        try fixture.marker("hold-hello-completion")
+        var startupReturned = false
+        let startup = Task { await fixture.monitor.start(); startupReturned = true }
+        try await fixture.waitForRequest("turn/start")
+        XCTAssertTrue(startupReturned)
+        XCTAssertFalse(fixture.monitor.isBusy)
+        fixture.monitor.shutdown()
+        await startup.value
+        let deadline = Date().addingTimeInterval(3)
+        while fixture.monitor.isSendingHello && Date() < deadline {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        XCTAssertFalse(fixture.monitor.isSendingHello)
+        XCTAssertEqual(try fixture.helloRequests().count, 1)
+    }
+
+    func testWakeRefreshesDisplayedUsageWhileHelloIsWaitingWithoutDuplicatingIt() async throws {
+        final class Notifications: CreditExpiryNotificationService {
+            func requestPermission() async -> Bool { false }
+            func deliver(_ reminder: CreditExpiryReminder) async throws {}
+            func clear() {}
+        }
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.writeUsage(usedPercent: 0)
+        try await fixture.refresh()
+        try fixture.enableHello()
+        try fixture.marker("hold-hello-completion")
+        let center = NotificationCenter()
+        let runtime = CreditExpiryRuntime(monitor: fixture.monitor, notifications: Notifications(), wakeNotifications: center)
+        defer { runtime.stop() }
+        await runtime.start()
+        try await fixture.waitForRequest("turn/start")
+        let previousUpdate = fixture.monitor.lastUpdated
+        try fixture.writeUsage(usedPercent: 15)
+        center.post(name: NSWorkspace.didWakeNotification, object: nil)
+        let deadline = Date().addingTimeInterval(3)
+        while fixture.monitor.selectedWindow?.quota.usedPercent != 15 && Date() < deadline {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        XCTAssertEqual(fixture.monitor.selectedWindow?.quota.usedPercent, 15)
+        XCTAssertNotEqual(fixture.monitor.lastUpdated, previousUpdate)
+        XCTAssertEqual(try fixture.helloRequests().count, 1)
+        XCTAssertTrue(fixture.monitor.isSendingHello)
+        runtime.stop()
+        let stoppedBy = Date().addingTimeInterval(3)
+        while fixture.monitor.isSendingHello && Date() < stoppedBy {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        XCTAssertFalse(fixture.monitor.isSendingHello)
     }
 
     func testConcurrentHelloMonitorsShareOnePersistentClaim() async throws {

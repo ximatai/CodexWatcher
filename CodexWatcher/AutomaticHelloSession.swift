@@ -20,18 +20,25 @@ final class AutomaticHelloSession {
     }
 
     func readAccountAndUsage() async throws -> (WatcherAccount?, UsageSnapshot?) {
+        try checkActive()
         try await client.connect()
+        try checkActive()
         let account: AccountResponse = try await client.request("account/read", params: ["refreshToken": false])
+        try checkActive()
         guard account.account?.type == "chatgpt" else { return (account.account, nil) }
         let usage: UsageSnapshot = try await client.request("account/rateLimits/read")
+        try checkActive()
         return (account.account, usage)
     }
 
     func prepare() async throws {
+        try checkActive()
         try await client.connect()
+        try checkActive()
         var cursor: String?
         var selected: HelloModel?
         for _ in 0..<10 {
+            try checkActive()
             var params: [String: Any] = ["limit": 100, "includeHidden": false]
             if let cursor { params["cursor"] = cursor }
             let catalog: HelloModelList = try await client.request("model/list", params: params)
@@ -40,6 +47,7 @@ final class AutomaticHelloSession {
             cursor = catalog.nextCursor
         }
         guard let selected else { throw WatcherError.message("未找到可用的默认文本模型，已跳过自动 hello。") }
+        try checkActive()
         model = selected.model
         let order = ["none", "minimal", "low", "medium", "high", "xhigh"]
         effort = order.first { value in selected.supportedReasoningEfforts.contains { $0.reasoningEffort == value } }
@@ -50,6 +58,7 @@ final class AutomaticHelloSession {
             "developerInstructions": "This is one greeting, not a coding task. Return only the requested greeting.",
             "config": ["project_doc_max_bytes": 0, "web_search": "disabled"]
         ])
+        try checkActive()
         guard response.modelProvider == "openai", response.thread.ephemeral == true,
               !response.thread.id.isEmpty else {
             throw WatcherError.message("CLI 未提供独立临时会话，已跳过自动 hello。")
@@ -73,11 +82,15 @@ final class AutomaticHelloSession {
         if let effort { params["effort"] = effort }
         let response: HelloTurnResponse = try await client.request("turn/start", params: params)
         let turn = response.turn
+        guard !turn.id.isEmpty else { throw WatcherError.message("自动 hello 回合标识无效。") }
         let deadline = Date().addingTimeInterval(completionTimeout)
         while !disconnected && Date() < deadline {
-            let status = completedTurns[turn.id] ?? turn.status
+            // Start-response status is not a completion event. Buffering notifications
+            // still supports a matching event arriving before the start response.
+            let status = completedTurns[turn.id]
             if status == "completed" { return }
             if status == "failed" || status == "interrupted" { break }
+            if turn.status == "failed" || turn.status == "interrupted" { break }
             try await Task.sleep(for: .milliseconds(50))
         }
         stop()
@@ -85,6 +98,11 @@ final class AutomaticHelloSession {
     }
 
     func stop() { client.stop() }
+
+    private func checkActive() throws {
+        try Task.checkCancellation()
+        guard !disconnected else { throw WatcherError.message("自动 hello 已停止。") }
+    }
 
     private func receive(_ method: String, params: [String: Any]) {
         guard params["threadId"] as? String == threadID else { return }

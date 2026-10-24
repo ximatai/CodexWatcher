@@ -38,6 +38,9 @@ final class UsageMonitor {
     @ObservationIgnored private let helloStore: AutomaticHelloStore
     @ObservationIgnored private var helloSession: AutomaticHelloSession?
     @ObservationIgnored private var helloTask: Task<Void, Never>?
+    @ObservationIgnored private var helloPollTask: Task<Void, Never>?
+    @ObservationIgnored private var helloGeneration = UUID()
+    @ObservationIgnored private var accountMutationDepth = 0
     @ObservationIgnored private var isCheckingHello = false
     private static let helloPreferenceKey = "automaticHelloConfiguration"
     @ObservationIgnored var requestExpiryNotificationPermission: (() async -> Bool)?
@@ -196,12 +199,22 @@ final class UsageMonitor {
         started = true
         await refresh()
         await processExpiringCredits()
-        await processAutomaticHello()
+        scheduleAutomaticHelloCheck()
         expiryTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .seconds(30)) } catch { break }
                 await self?.processExpiringCredits()
-                await self?.processAutomaticHello()
+            }
+        }
+        helloPollTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(30)) } catch { break }
+                guard let self else { break }
+                guard Self.readHelloConfiguration(self.defaults).enabled else { continue }
+                // Preserve the enabled feature's UI refresh cadence using the
+                // normal read coordinator, independently of the model job.
+                await self.refresh()
+                self.scheduleAutomaticHelloCheck()
             }
         }
         pollTask = Task { @MainActor [weak self] in
@@ -214,8 +227,8 @@ final class UsageMonitor {
 
     func shutdown() {
         expiryChecksStopped = true
-        helloTask?.cancel()
-        helloSession?.stop()
+        invalidateAutomaticHello()
+        helloPollTask?.cancel()
         expiryTask?.cancel()
         pollTask?.cancel()
         notificationTask?.cancel()
@@ -237,6 +250,7 @@ final class UsageMonitor {
     private func readAccountAndUsage() async throws {
         let response: AccountResponse = try await client.request("account/read", params: ["refreshToken": false])
         if response.account?.email != account?.email || response.account == nil {
+            if helloSession != nil { invalidateAutomaticHello() }
             snapshot = nil
             lastUpdated = nil
             pendingRedemption = nil
@@ -250,6 +264,9 @@ final class UsageMonitor {
             return
         }
         let fresh: UsageSnapshot = try await client.request("account/rateLimits/read")
+        if helloSession != nil, fresh.accountId != automaticHelloConfiguration.accountKey {
+            invalidateAutomaticHello()
+        }
         snapshot = fresh
         lastUpdated = .now
         if let key = redemptionStorageKey {
@@ -259,6 +276,8 @@ final class UsageMonitor {
 
     func login() async {
         guard !isBusy, loginID == nil else { return }
+        beginAccountMutation()
+        defer { endAccountMutation() }
         isBusy = true
         notice = nil
         defer { isBusy = false }
@@ -288,6 +307,8 @@ final class UsageMonitor {
 
     func cancelLogin() async {
         guard let id = loginID else { return }
+        beginAccountMutation()
+        defer { endAccountMutation() }
         loginTimeout?.cancel()
         loginTimeout = nil
         loginID = nil
@@ -297,6 +318,8 @@ final class UsageMonitor {
 
     func logout() async {
         guard !isBusy else { return }
+        beginAccountMutation()
+        defer { endAccountMutation() }
         isBusy = true
         defer { isBusy = false }
         do {
@@ -319,6 +342,8 @@ final class UsageMonitor {
             return
         }
         guard canConfirmRedemption(confirmation, at: .now) else { return }
+        beginAccountMutation()
+        defer { endAccountMutation() }
         let storageKey = confirmation.accountKey
         var automaticReservation: PendingRedemption?
         isBusy = true
@@ -653,22 +678,45 @@ final class UsageMonitor {
                 accountKey: authorization.accountKey, windowID: authorization.windowID)
         } else {
             automaticHelloConfiguration = AutomaticHelloConfiguration()
-            helloTask?.cancel()
-            helloSession?.stop()
+            invalidateAutomaticHello()
         }
         do {
             defaults.set(try JSONEncoder().encode(automaticHelloConfiguration), forKey: Self.helloPreferenceKey)
             automaticHelloMessage = nil
             automaticHelloRecord = nil
             // Disabling never clears the disk latch, even when immediately re-enabled.
-            if enabled && started {
-                helloTask = Task { @MainActor [weak self] in await self?.processAutomaticHello() }
-            }
+            if enabled && started { scheduleAutomaticHelloCheck() }
         } catch { automaticHelloMessage = "无法保存自动 hello 设置。" }
     }
 
-    private func helloAuthorized(_ config: AutomaticHelloConfiguration) -> Bool {
-        !expiryChecksStopped && !Task.isCancelled && config.enabled
+    // Foreground writes and expiring-card redemption preempt the optional background job.
+    // Epoch checks also cover direct callers whose task is not owned by the scheduler.
+    private func invalidateAutomaticHello() {
+        helloGeneration = UUID()
+        helloTask?.cancel()
+        helloSession?.stop()
+    }
+
+    private func beginAccountMutation() {
+        accountMutationDepth += 1
+        invalidateAutomaticHello()
+    }
+
+    private func endAccountMutation() { accountMutationDepth -= 1 }
+
+    func scheduleAutomaticHelloCheck() {
+        guard !expiryChecksStopped, helloTask == nil, !isCheckingHello,
+              Self.readHelloConfiguration(defaults).enabled else { return }
+        helloTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer { self.helloTask = nil }
+            await self.processAutomaticHello()
+        }
+    }
+
+    private func helloAuthorized(_ config: AutomaticHelloConfiguration, generation: UUID) -> Bool {
+        !expiryChecksStopped && !Task.isCancelled && generation == helloGeneration
+            && accountMutationDepth == 0 && !isRedeeming && config.enabled
             && Self.readHelloConfiguration(defaults) == config && loginID == nil
     }
 
@@ -683,72 +731,76 @@ final class UsageMonitor {
     func processAutomaticHello() async {
         automaticHelloConfiguration = Self.readHelloConfiguration(defaults)
         let config = automaticHelloConfiguration
-        guard helloAuthorized(config), !isCheckingHello, !isBusy else { return }
+        let generation = helloGeneration
+        guard helloAuthorized(config, generation: generation), !isCheckingHello,
+              let owner = config.accountKey, let windowID = config.windowID else { return }
         isCheckingHello = true
         defer { isCheckingHello = false }
-        let initialRead = Date()
-        await refresh()
-        guard helloAuthorized(config), account?.type == "chatgpt", errorMessage == nil,
-              !isBusy, pendingRedemption == nil,
-              let observation = helloObservation(config, snapshot: snapshot, startedAt: initialRead),
-              let owner = config.accountKey, let windowID = config.windowID else {
-            automaticHelloMessage = "账号、额度窗口或重置时间不可用，已暂停。"
-            return
-        }
-        do {
-            let eligible = try helloStore.observe(observation, claim: false)
-            automaticHelloRecord = try helloStore.record(account: owner, windowID: windowID)
-            automaticHelloMessage = nil
-            guard eligible != nil else { return }
-        } catch {
-            automaticHelloMessage = "自动 hello 记录不可用，已暂停。"
-            return
-        }
-        isBusy = true
-        defer { isBusy = false }
         let session = AutomaticHelloSession(client: client.makeHelloClient())
         helloSession = session
         defer { session.stop(); helloSession = nil; isSendingHello = false }
         var claimed: AutomaticHelloRecord?
         do {
-            // Verify the dedicated process uses the same ChatGPT account before creating a thread.
+            // All hello reads and model work stay on its independent transport.
+            // A slow catalog or inference must not monopolize foreground isBusy.
+            let initialRead = Date()
             let (identity, usage) = try await session.readAccountAndUsage()
-            guard helloAuthorized(config), identity?.type == "chatgpt", usage?.accountId == owner else { return }
+            guard helloAuthorized(config, generation: generation) else { return }
+            guard identity?.type == "chatgpt",
+                  let observation = helloObservation(config, snapshot: usage, startedAt: initialRead),
+                  try resetStore.pending(for: owner) == nil else {
+                automaticHelloMessage = "账号、额度窗口或重置时间不可用，已暂停。"
+                return
+            }
+            let eligible = try helloStore.observe(observation, claim: false)
+            automaticHelloRecord = try helloStore.record(account: owner, windowID: windowID)
+            automaticHelloMessage = nil
+            guard eligible != nil else { return }
             try await session.prepare()
             let finalRead = Date()
             let (finalIdentity, fresh) = try await session.readAccountAndUsage()
-            guard helloAuthorized(config), finalIdentity?.type == "chatgpt",
+            guard helloAuthorized(config, generation: generation), finalIdentity?.type == "chatgpt",
                   let freshObservation = helloObservation(config, snapshot: fresh, startedAt: finalRead),
                   freshObservation.isFull, try resetStore.pending(for: owner) == nil else { return }
+            // MainActor serializes this claim and send with foreground mutation entry.
+            // Mutations invalidate the epoch and stop this transport before proceeding.
             guard let reservation = try helloStore.observe(freshObservation, claim: true),
                   let attemptID = reservation.attemptID else { return }
             claimed = reservation
             automaticHelloRecord = reservation
             isSendingHello = true
-            try await session.sendHello { self.helloAuthorized(config) }
-            // A completed turn confirms the greeting, not that the server started a new timer.
+            try await session.sendHello { self.helloAuthorized(config, generation: generation) }
             var baseline: HelloObservation?
             let postRead = Date()
-            if let (identity, usage) = try? await session.readAccountAndUsage(), identity?.type == "chatgpt" {
+            if helloAuthorized(config, generation: generation),
+               let (identity, usage) = try? await session.readAccountAndUsage(), identity?.type == "chatgpt" {
                 baseline = helloObservation(config, snapshot: usage, startedAt: postRead)
             }
             try helloStore.finish(account: owner, windowID: windowID, attemptID: attemptID,
                                   outcome: "completed", baseline: baseline)
+            guard helloAuthorized(config, generation: generation) else { return }
             automaticHelloRecord = try helloStore.record(account: owner, windowID: windowID)
             automaticHelloMessage = nil
-            do { try await readAccountAndUsage(); errorMessage = nil }
-            catch { automaticHelloMessage = "hello 已完成，最新额度暂未读取成功。" }
+            // Use the normal read coordinator only for the final UI refresh.
+            // If foreground work owns it, that work will update the UI instead.
+            await refresh()
+            if helloAuthorized(config, generation: generation), errorMessage != nil {
+                automaticHelloMessage = "hello 已完成，最新额度暂未读取成功。"
+            }
         } catch {
             if let attemptID = claimed?.attemptID {
                 try? helloStore.finish(account: owner, windowID: windowID, attemptID: attemptID, outcome: "unknown")
-                automaticHelloRecord = try? helloStore.record(account: owner, windowID: windowID)
+            }
+            guard helloAuthorized(config, generation: generation) else { return }
+            automaticHelloRecord = try? helloStore.record(account: owner, windowID: windowID)
+            if claimed != nil {
                 if case let WatcherError.message(message) = error {
                     automaticHelloMessage = message
                 } else {
                     automaticHelloMessage = "本次 hello 结果未确认。"
                 }
             } else {
-                automaticHelloMessage = "自动 hello 未能准备就绪，请检查 CLI 与连接。"
+                automaticHelloMessage = "自动 hello 未能准备就绪，请检查 CLI、连接及本地记录。"
             }
         }
     }
@@ -765,6 +817,8 @@ final class UsageMonitor {
             errorMessage = "请选择可执行的 codex 文件。"
             return
         }
+        beginAccountMutation()
+        defer { endAccountMutation() }
         client.stop()
         client.executablePath = url.path
         executablePath = url.path
@@ -775,6 +829,7 @@ final class UsageMonitor {
     private func handleNotification(_ method: String, params: [String: Any]) {
         if method == "account/login/completed" {
             guard let id = params["loginId"] as? String, id == loginID else { return }
+            invalidateAutomaticHello()
             loginID = nil
             loginURL = nil
             loginTimeout?.cancel()
@@ -782,7 +837,9 @@ final class UsageMonitor {
                 errorMessage = "登录未完成，请重试；若官方客户端正在登录，请先完成该流程。"
                 return
             }
-        } else if method != "account/updated" && method != "account/rateLimits/updated" { return }
+        } else if method == "account/updated" {
+            invalidateAutomaticHello()
+        } else if method != "account/rateLimits/updated" { return }
         notificationTask?.cancel()
         notificationTask = Task { @MainActor [weak self] in
             do { try await Task.sleep(for: .milliseconds(500)) } catch { return }
@@ -791,7 +848,7 @@ final class UsageMonitor {
                 do { try await Task.sleep(for: .milliseconds(200)) } catch { return }
             }
             await self?.refresh()
-            await self?.processAutomaticHello()
+            self?.scheduleAutomaticHelloCheck()
         }
     }
 }

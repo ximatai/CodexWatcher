@@ -108,7 +108,7 @@ private struct DashboardContent: View {
         .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didWakeNotification)) { _ in
             Task { await monitor.refresh() }
         }
-        .task { await monitor.refresh(); await monitor.processAutomaticHello() }
+        .task { await monitor.refresh(); monitor.scheduleAutomaticHelloCheck() }
     }
 
     private func finishExpiryReviewDismissal() {

@@ -26,10 +26,13 @@ final class AutomaticHelloSessionTests: XCTestCase {
               if [ "$behavior" = "early-completion" ]; then
                 printf '{"method":"turn/completed","params":{"threadId":"hello-thread","turn":{"id":"hello-turn","status":"completed"}}}\n'
               fi
-              printf '{"id":%s,"result":{"turn":{"id":"hello-turn","status":"inProgress"}}}\n' "$id"
+              status=inProgress
+              if [ "$behavior" = "completed-ack-only" ]; then status=completed; fi
+              printf '{"id":%s,"result":{"turn":{"id":"hello-turn","status":"%s"}}}\n' "$id" "$status"
               case "$behavior" in
-                ack-only|early-completion) ;;
+                ack-only|completed-ack-only|early-completion) ;;
                 wrong-thread) printf '{"method":"turn/completed","params":{"threadId":"another-thread","turn":{"id":"hello-turn","status":"completed"}}}\n' ;;
+                wrong-turn) printf '{"method":"turn/completed","params":{"threadId":"hello-thread","turn":{"id":"other-turn","status":"completed"}}}\n' ;;
                 approval) printf '{"id":999,"method":"item/commandExecution/requestApproval","params":{"threadId":"hello-thread"}}\n' ;;
                 tool) printf '{"method":"item/started","params":{"threadId":"hello-thread","item":{"type":"commandExecution"}}}\n' ;;
                 *) printf '{"method":"turn/completed","params":{"threadId":"hello-thread","turn":{"id":"hello-turn","status":"failed"}}}\n' ;;
@@ -77,7 +80,7 @@ final class AutomaticHelloSessionTests: XCTestCase {
     }
 
     func testAcknowledgmentWrongThreadFailureAndToolRequestsAreNotSuccess() async throws {
-        for behavior in ["ack-only", "wrong-thread", "failed", "approval", "tool"] {
+        for behavior in ["ack-only", "completed-ack-only", "wrong-thread", "wrong-turn", "failed", "approval", "tool"] {
             let (directory, client) = try fixture(behavior)
             let session = AutomaticHelloSession(client: client, completionTimeout: 0.15)
             defer { session.stop(); try? FileManager.default.removeItem(at: directory) }
@@ -87,6 +90,22 @@ final class AutomaticHelloSessionTests: XCTestCase {
                 XCTFail("\(behavior) must not be reported as completed")
             } catch {}
         }
+    }
+
+    func testStoppedSessionCannotReconnectDuringLaterPreflight() async throws {
+        let (directory, client) = try fixture("early-completion")
+        let session = AutomaticHelloSession(client: client)
+        defer { session.stop(); try? FileManager.default.removeItem(at: directory) }
+        try await session.prepare()
+        session.stop()
+        do { _ = try await session.readAccountAndUsage(); XCTFail("Stopped session must stay stopped") } catch {}
+        do { try await session.prepare(); XCTFail("Preparation must not restart a stopped session") } catch {}
+        let log = try String(contentsOf: directory.appendingPathComponent("requests.jsonl"), encoding: .utf8)
+        let methods = try log.split(separator: "\n").compactMap {
+            (try JSONSerialization.jsonObject(with: Data($0.utf8)) as? [String: Any])?["method"] as? String
+        }
+        XCTAssertEqual(methods.filter { $0 == "initialize" }.count, 1)
+        XCTAssertFalse(methods.contains("account/read"))
     }
 
     func testAuthorizationRevokedImmediatelyBeforeSendCreatesNoTurn() async throws {

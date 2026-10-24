@@ -33,7 +33,10 @@ final class CreditExpiryRuntime {
             object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor in
                 await self?.monitor.processExpiringCredits()
-                await self?.monitor.processAutomaticHello()
+                if self?.monitor.automaticHelloConfiguration.enabled == true {
+                    await self?.monitor.refresh()
+                }
+                self?.monitor.scheduleAutomaticHelloCheck()
             }
         }
     }
