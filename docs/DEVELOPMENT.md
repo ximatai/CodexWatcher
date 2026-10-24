@@ -54,7 +54,7 @@ bash scripts/generate-screenshots.sh
 
 ## 接入范围
 
-本应用通过本地 Codex App Server 的账号接口读取额度，并提供手动重置及明确授权后的临期自动使用入口。账号凭证由 CLI 的系统钥匙串存储管理，应用不使用开发者自建后端。
+本应用通过本地 Codex App Server 的账号接口读取额度，并提供手动重置、明确授权后的临期自动使用，以及默认关闭的满额自动 hello 入口。账号凭证由 CLI 的系统钥匙串存储管理，应用不使用开发者自建后端。
 
 截至 2026-10-21，[官方认证说明](https://learn.chatgpt.com/docs/app-server#auth-endpoints)允许已有本地或开源应用继续使用此认证，同时明确不允许将 App Server 认证用于商业或托管服务。官方建议迁移至 [Sign in with ChatGPT](https://developers.openai.com/siwc/quickstart)。
 
@@ -65,6 +65,8 @@ bash scripts/generate-screenshots.sh
 | 数据 | 位置与用途 |
 | --- | --- |
 | CLI 独立配置 | `~/Library/Application Support/CodexWatcher/Runtime`，与其他客户端隔离 |
+| 满额问候去重 | 同级 `State/automatic-hello.json`，保存账号/窗口的认领状态、尝试结果及用量基线；未知结果不补发，不含令牌或回复 |
+| 问候工作目录 | 同级 `HelloWorkspace/`，仅供独立临时 hello 会话使用 |
 | 待确认重置 | 同级 `State/pending-resets.json`，保存账号标识、卡片 ID、幂等键，及自动请求的原到期时间、次数和重试租约，不含密码或访问令牌 |
 | 临期处理记录 | 同级 `State/expiry-actions.json`，保存账号与卡片组合的哈希标识及处理模式，跨重启和实例去重；不要作为缓存删除 |
 | 应用偏好 | 本地 UserDefaults，保存外观、CLI 路径、显示选项及绑定账号的临期处理配置等 |

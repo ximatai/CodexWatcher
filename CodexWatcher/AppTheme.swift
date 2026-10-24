@@ -30,19 +30,31 @@ enum AppAppearance: String, CaseIterable, Identifiable {
 
 struct AppPalette {
     let dark: Bool
-    var background: Color { dark ? Color(red: 0.075, green: 0.087, blue: 0.102) : Color(red: 0.98, green: 0.985, blue: 0.99) }
-    var surface: Color { dark ? Color(red: 0.107, green: 0.122, blue: 0.14) : .white }
-    var accent: Color { dark ? Color(red: 0.29, green: 0.88, blue: 0.85) : Color(red: 0, green: 0.56, blue: 0.49) }
-    var warning: Color { dark ? Color(red: 1, green: 0.75, blue: 0.36) : Color(red: 0.74, green: 0.36, blue: 0.04) }
+    var background: Color { dark ? color(0x13161A) : color(0xFAFBFC) }
+    var surface: Color { dark ? color(0x1B1F24) : .white }
+    var accent: Color { dark ? color(0x62CFC3) : color(0x4B6484) }
+    var warning: Color { dark ? color(0xE6B86A) : color(0xA65B16) }
+    var danger: Color { dark ? color(0xED8B92) : color(0xB83E48) }
+    var selectedSurface: Color { dark ? accent.opacity(0.06) : color(0xF0F3F7) }
+    var selectedBorder: Color { dark ? accent.opacity(0.45) : color(0xA9B7CA) }
     var separator: Color { Color.primary.opacity(dark ? 0.10 : 0.08) }
-    var track: Color { dark ? Color(red: 0.19, green: 0.22, blue: 0.26) : Color(red: 0.90, green: 0.92, blue: 0.94) }
+    var track: Color { dark ? color(0x303842) : color(0xE6EBF0) }
+    // Presentation only; a pace difference does not predict quota exhaustion.
+    func deviationColor(_ deviation: Double?) -> Color {
+        guard let deviation else { return .secondary }
+        return deviation > 10 ? warning : .primary
+    }
     func creditExpiryColor(_ urgency: CreditExpiryUrgency) -> Color {
         switch urgency {
-        case .withinThreeDays:
-            return dark ? Color(red: 0.48, green: 0.73, blue: 1) : Color(red: 0.12, green: 0.38, blue: 0.72)
+        case .withinThreeDays: return .secondary
         case .tomorrow: return warning
-        case .today:
-            return dark ? Color(red: 1, green: 0.48, blue: 0.48) : Color(red: 0.76, green: 0.18, blue: 0.22)
+        case .today: return danger
         }
+    }
+
+    private func color(_ hex: UInt32) -> Color {
+        Color(red: Double((hex >> 16) & 0xFF) / 255,
+              green: Double((hex >> 8) & 0xFF) / 255,
+              blue: Double(hex & 0xFF) / 255)
     }
 }

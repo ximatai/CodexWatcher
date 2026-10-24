@@ -31,7 +31,7 @@ done
     (root / 'usage.json').write_text(json.dumps({
         'accountId': 'smoke-fixture',
         'rateLimits': {'limitId': 'codex', 'primary': {
-            'usedPercent': 35, 'windowDurationMins': 60, 'resetsAt': time.time() + 1800}},
+            'usedPercent': 0, 'windowDurationMins': 60, 'resetsAt': time.time() + 1800}},
         'rateLimitResetCredits': {'availableCount': 1, 'credits': [{
             'id': 'smoke-card', 'status': 'available', 'resetType': 'codexRateLimits',
             'grantedAt': time.time() - 60, 'expiresAt': time.time() + 800}]}

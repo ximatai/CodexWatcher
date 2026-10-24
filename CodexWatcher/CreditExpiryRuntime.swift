@@ -31,7 +31,13 @@ final class CreditExpiryRuntime {
         monitor.clearExpiryNotifications = { [weak notifications] in notifications?.clear() }
         wakeObserver = wakeNotifications.addObserver(forName: NSWorkspace.didWakeNotification,
             object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor in await self?.monitor.processExpiringCredits() }
+            Task { @MainActor in
+                await self?.monitor.processExpiringCredits()
+                if self?.monitor.automaticHelloConfiguration.enabled == true {
+                    await self?.monitor.refresh()
+                }
+                self?.monitor.scheduleAutomaticHelloCheck()
+            }
         }
     }
 

@@ -4,11 +4,16 @@ struct CreditExpirySettingsView: View {
     @Bindable var monitor: UsageMonitor
     var onClose: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.locale) private var locale
+    @Environment(\.timeZone) private var timeZone
+    @Environment(\.colorScheme) private var colorScheme
+    @AppStorage("privacyMode") private var hideEmail = false
     @State private var confirmingAutomatic = false
     @State private var automaticAuthorization: AutomaticExpiryAuthorization?
     @State private var selectedMode = CreditExpiryMode.remind
 
     private var enabled: Bool { monitor.expiryConfiguration.mode != .off }
+    private var palette: AppPalette { AppPalette(dark: colorScheme == .dark) }
     private func select(_ mode: CreditExpiryMode) {
         if mode == .automatic {
             guard let authorization = monitor.makeAutomaticExpiryAuthorization() else {
@@ -49,13 +54,25 @@ struct CreditExpirySettingsView: View {
             }
             .disabled(monitor.isConfiguringExpiry || monitor.isBusy)
             if enabled {
-                Text(monitor.expiryConfiguration.mode == .automatic
-                     ? "失败时最多重试 2 次，卡片消耗后无法恢复。"
-                     : "通知提醒，确认后使用。")
-                    .font(.callout).fixedSize(horizontal: false, vertical: true)
-                if !monitor.expiryConfigurationMatchesAccount {
-                    Label("账号已切换，已暂停。请关闭后重新开启。", systemImage: "pause.circle")
-                        .font(.caption).foregroundStyle(.orange)
+                VStack(alignment: .leading, spacing: 10) {
+                    if monitor.expiryConfigurationMatchesAccount {
+                        HStack {
+                            if let email = monitor.account?.email {
+                                Text(email).lineLimit(1).truncationMode(.middle).privacyMasked(hideEmail)
+                            }
+                            Spacer()
+                            if let checked = monitor.lastExpiryCheck {
+                                Text(PresentationFormat(locale: locale, timeZone: timeZone).date(checked, timeOnly: true))
+                                    .help("最近一次成功检查")
+                            }
+                        }.font(.caption).foregroundStyle(.secondary)
+                        if monitor.pendingRedemption != nil || monitor.errorMessage != nil || monitor.isRedeeming {
+                            Text(monitor.expiryStatusTitle).font(.callout).foregroundStyle(palette.warning)
+                        }
+                    } else {
+                        Text("账号不匹配，已暂停。请关闭后重新开启。")
+                            .font(.caption).foregroundStyle(palette.warning)
+                    }
                 }
             }
             if let message = monitor.expiryHandlingMessage {
@@ -63,11 +80,19 @@ struct CreditExpirySettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Divider()
-            Text("仅用于启用时的账号；应用运行且 Mac 未休眠时生效。")
-                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                .help("每 30 秒检查一次。失败后间隔至少 30 秒重试原卡，固定原到期时间与请求标识；最多 3 次后转为人工核实。")
+            HStack {
+                Text("仅 Mac 唤醒且应用运行时生效")
+                    .font(.caption).foregroundStyle(.secondary)
+                Spacer()
+                if enabled && monitor.expiryConfiguration.mode == .automatic {
+                    Image(systemName: "exclamationmark.triangle")
+                        .foregroundStyle(palette.warning).accessibilityLabel("卡片消耗后无法撤销")
+                        .help("卡片消耗后无法撤销；最多尝试 3 次，间隔至少 30 秒，始终复用原请求。")
+                }
+            }
         }
         .padding(20).frame(width: 380)
+        .tint(palette.accent)
         .onAppear {
             if enabled { selectedMode = monitor.expiryConfiguration.mode }
         }

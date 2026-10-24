@@ -7,10 +7,11 @@ enum WatcherError: LocalizedError {
     }
 }
 
-/// Account-only JSON-RPC client. Never creates a thread or runs a model turn.
+/// JSON-RPC transport. Account monitoring and opt-in hello use separate processes.
 @MainActor
 final class AppServerClient {
     var onNotification: ((String, [String: Any]) -> Void)?
+    var onDisconnect: (() -> Void)?
     private var process: Process?
     private var input: FileHandle?
     private var output: FileHandle?
@@ -22,18 +23,26 @@ final class AppServerClient {
     private var pending: [Int: (CheckedContinuation<Data, Error>, Task<Void, Never>)] = [:]
     private(set) var isReady = false
     private let requestTimeout: Duration
+    private let automaticHello: Bool
+    var helloWorkspace: URL { runtimeDirectory.deletingLastPathComponent().appendingPathComponent("HelloWorkspace") }
 
     let runtimeDirectory: URL
     var executablePath: String
 
     init(executablePath: String? = nil,
          runtimeDirectory: URL? = nil,
-         requestTimeout: Duration = .seconds(30)) {
+         requestTimeout: Duration = .seconds(30), automaticHello: Bool = false) {
         self.requestTimeout = requestTimeout
+        self.automaticHello = automaticHello
         self.executablePath = executablePath ?? Self.defaultExecutablePath
         self.runtimeDirectory = runtimeDirectory ?? FileManager.default.urls(
             for: .applicationSupportDirectory, in: .userDomainMask
         )[0].appendingPathComponent("CodexWatcher/Runtime", isDirectory: true)
+    }
+
+    func makeHelloClient() -> AppServerClient {
+        AppServerClient(executablePath: executablePath, runtimeDirectory: runtimeDirectory,
+                        requestTimeout: requestTimeout, automaticHello: true)
     }
 
     static var defaultExecutablePath: String {
@@ -69,6 +78,19 @@ final class AppServerClient {
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: executablePath)
         proc.arguments = ["app-server", "--stdio", "-c", "cli_auth_credentials_store=\"keyring\""]
+        if automaticHello {
+            try FileManager.default.createDirectory(at: helloWorkspace, withIntermediateDirectories: true,
+                                                   attributes: [.posixPermissions: 0o700])
+            let disabled = ["shell_tool", "apps", "plugins", "remote_plugin", "hooks", "memories",
+                            "multi_agent", "browser_use", "browser_use_external", "in_app_browser",
+                            "computer_use", "view_image", "code_mode", "code_mode_host", "shell_snapshot",
+                            "goals", "sleep_tool", "skill_search", "workspace_dependencies"]
+            for feature in disabled { proc.arguments! += ["-c", "features.\(feature)=false"] }
+            for setting in ["web_search=\"disabled\"", "project_doc_max_bytes=0", "mcp_servers={}",
+                            "notify=[]", "features.skip_host_skill_discovery=true"] {
+                proc.arguments! += ["-c", setting]
+            }
+        }
         // Do not inherit API keys or token overrides from a shell/IDE launching the app.
         let inherited = ProcessInfo.processInfo.environment
         let allowed = ["HOME", "USER", "LOGNAME", "TMPDIR", "LANG", "LC_ALL", "LC_CTYPE", "SHELL",
@@ -79,7 +101,7 @@ final class AppServerClient {
         environment["CODEX_HOME"] = runtimeDirectory.path
         environment["PATH"] = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
         proc.environment = environment
-        proc.currentDirectoryURL = runtimeDirectory
+        proc.currentDirectoryURL = automaticHello ? helloWorkspace : runtimeDirectory
         let stdin = Pipe(), stdout = Pipe()
         proc.standardInput = stdin
         proc.standardOutput = stdout
@@ -166,6 +188,11 @@ final class AppServerClient {
                 } else {
                     entry.0.resume(throwing: WatcherError.message("Codex 返回了无法识别的数据。"))
                 }
+            } else if automaticHello, object["method"] != nil, let requestID = object["id"] {
+                // Never grant permissions or execute client-side tools for a hello.
+                try? send(["id": requestID, "error": ["code": -32601, "message": "Unsupported request"]])
+                stop(reason: "自动 hello 请求了额外能力，已停止。")
+                return
             } else if let method = object["method"] as? String, object["id"] == nil {
                 onNotification?(method, object["params"] as? [String: Any] ?? [:])
             }
@@ -190,6 +217,7 @@ final class AppServerClient {
             entry.1.cancel()
             entry.0.resume(throwing: WatcherError.message(reason))
         }
+        onDisconnect?()
     }
 }
 
