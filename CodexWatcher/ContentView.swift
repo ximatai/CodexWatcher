@@ -1,16 +1,22 @@
 import SwiftUI
 import AppKit
 
+enum DashboardSettingsPage {
+    case menuBar, creditExpiry, automaticHello
+}
+
 struct ContentView: View {
     @Bindable var monitor: UsageMonitor
     var handlesExpiryReminders = false
     var openDashboard: () -> Void = {}
+    var presentSettings: ((DashboardSettingsPage) -> Void)?
+    var presentReset: ((ResetConfirmation) -> Void)?
     var flexibleSize = false
     var maximumHeight: CGFloat = 660
     @AppStorage("appearance") private var appearance = AppAppearance.system.rawValue
 
     var body: some View {
-        DashboardContent(monitor: monitor, appearance: $appearance, handlesExpiryReminders: handlesExpiryReminders, openDashboard: openDashboard, flexibleSize: flexibleSize, maximumHeight: maximumHeight)
+        DashboardContent(monitor: monitor, appearance: $appearance, handlesExpiryReminders: handlesExpiryReminders, openDashboard: openDashboard, presentSettings: presentSettings, presentReset: presentReset, flexibleSize: flexibleSize, maximumHeight: maximumHeight)
             .onAppear { applyAppearance() }
             .onChange(of: appearance) { _, _ in applyAppearance() }
     }
@@ -29,6 +35,8 @@ private struct DashboardContent: View {
     @AppStorage("privacyMode") private var privacyMode = false
     let handlesExpiryReminders: Bool
     let openDashboard: () -> Void
+    let presentSettings: ((DashboardSettingsPage) -> Void)?
+    let presentReset: ((ResetConfirmation) -> Void)?
     let flexibleSize: Bool
     let maximumHeight: CGFloat
     @State private var resetConfirmation: ResetConfirmation?
@@ -310,7 +318,7 @@ private struct DashboardContent: View {
             HStack {
                 Text("重置卡").font(.headline)
                 Spacer()
-                Button { showingExpirySettings = true } label: {
+                Button { showSettings(.creditExpiry) } label: {
                     Image(systemName: monitor.expiryConfiguration.mode == .automatic ? "bolt.badge.clock" : "bell")
                 }
                 .buttonStyle(.plain).foregroundStyle(.secondary)
@@ -330,7 +338,7 @@ private struct DashboardContent: View {
             if monitor.pendingRedemption != nil {
                 statusMessage("上次重置结果未确认", symbol: "exclamationmark.circle", color: palette.warning)
                 Button("重试上次重置") {
-                    resetConfirmation = monitor.makeResetConfirmation(for: nil)
+                    showReset(monitor.makeResetConfirmation(for: nil))
                 }.disabled(monitor.isBusy)
             }
             if !monitor.sortedCredits.isEmpty {
@@ -384,7 +392,7 @@ private struct DashboardContent: View {
                         .help(format.date(expiry, precise: true))
                 } else { Text("有效期未提供").foregroundStyle(.secondary) }
             }.font(.system(size: 11)).frame(maxWidth: .infinity, alignment: .leading)
-            Button("使用") { resetConfirmation = monitor.makeResetConfirmation(for: credit) }
+            Button("使用") { showReset(monitor.makeResetConfirmation(for: credit)) }
                 .font(.system(size: 11, weight: .medium))
                 .buttonStyle(.bordered).controlSize(.small).tint(.secondary)
                 .modifier(ControlHoverFeedback(color: palette.accent))
@@ -437,6 +445,21 @@ private struct DashboardContent: View {
         }
     }
 
+    private func showSettings(_ page: DashboardSettingsPage) {
+        if let presentSettings { presentSettings(page); return }
+        switch page {
+        case .menuBar: showingMenuBarSettings = true
+        case .creditExpiry: showingExpirySettings = true
+        case .automaticHello: showingHelloSettings = true
+        }
+    }
+
+    private func showReset(_ confirmation: ResetConfirmation?) {
+        guard let confirmation else { return }
+        if let presentReset { presentReset(confirmation) }
+        else { resetConfirmation = confirmation }
+    }
+
     private var footer: some View {
         VStack(spacing: 0) {
             separator.padding(.horizontal, 22)
@@ -452,9 +475,9 @@ private struct DashboardContent: View {
                 .help(monitor.expiryConfiguration.mode == .off && !monitor.automaticHelloConfiguration.enabled ? "每 5 分钟刷新" : "自动处理每 30 秒检查并刷新")
                 Spacer(minLength: 0)
                 Menu {
-                    Button("状态栏显示…") { showingMenuBarSettings = true }
-                    Button("重置卡临期处理…") { showingExpirySettings = true }
-                    Button("满额自动 hello…") { showingHelloSettings = true }
+                    Button("状态栏显示…") { showSettings(.menuBar) }
+                    Button("重置卡临期处理…") { showSettings(.creditExpiry) }
+                    Button("满额自动 hello…") { showSettings(.automaticHello) }
                     Toggle(isOn: $privacyMode) { Label("隐藏邮箱", systemImage: "eye.slash") }
                     Picker("外观", selection: $appearance) {
                         ForEach(AppAppearance.allCases) { option in
