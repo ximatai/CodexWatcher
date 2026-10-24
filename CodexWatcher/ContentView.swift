@@ -5,10 +5,12 @@ struct ContentView: View {
     @Bindable var monitor: UsageMonitor
     var handlesExpiryReminders = false
     var openDashboard: () -> Void = {}
+    var flexibleSize = false
+    var maximumHeight: CGFloat = 660
     @AppStorage("appearance") private var appearance = AppAppearance.system.rawValue
 
     var body: some View {
-        DashboardContent(monitor: monitor, appearance: $appearance, handlesExpiryReminders: handlesExpiryReminders, openDashboard: openDashboard)
+        DashboardContent(monitor: monitor, appearance: $appearance, handlesExpiryReminders: handlesExpiryReminders, openDashboard: openDashboard, flexibleSize: flexibleSize, maximumHeight: maximumHeight)
             .onAppear { applyAppearance() }
             .onChange(of: appearance) { _, _ in applyAppearance() }
     }
@@ -27,9 +29,12 @@ private struct DashboardContent: View {
     @AppStorage("privacyMode") private var privacyMode = false
     let handlesExpiryReminders: Bool
     let openDashboard: () -> Void
+    let flexibleSize: Bool
+    let maximumHeight: CGFloat
     @State private var resetConfirmation: ResetConfirmation?
     @State private var showingMenuBarSettings = false
     @State private var showingExpirySettings = false
+    @State private var showingHelloSettings = false
     @State private var expiryReviewQueue = CreditExpiryReviewQueue()
     @FocusState private var quitButtonFocused: Bool
     private let loginItem = LoginItemController.shared
@@ -39,36 +44,33 @@ private struct DashboardContent: View {
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { context in
             VStack(spacing: 0) {
+                VStack(spacing: 12) {
+                    header
+                    feedback
+                    separator
+                }
+                .padding(.horizontal, 22).padding(.top, 20).padding(.bottom, 14)
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        header
-                        separator
+                    VStack(alignment: .leading, spacing: 18) {
                         if monitor.account?.type == "chatgpt" {
                             if let window = monitor.selectedWindow {
                                 usageSection(window, date: context.date)
                             } else {
-                                ContentUnavailableView("暂无额度数据", systemImage: "gauge.with.dots.needle.0percent",
-                                                       description: Text("刷新后将显示账号提供的额度窗口。"))
+                                ContentUnavailableView("暂无额度数据", systemImage: "gauge.with.dots.needle.0percent")
                             }
                             separator
                             creditsSection(date: context.date)
                         } else {
                             welcome
                         }
-                        if let error = monitor.errorMessage {
-                            statusMessage(error, symbol: "exclamationmark.triangle", color: palette.warning)
-                        }
-                        if let notice = monitor.notice {
-                            statusMessage(notice, symbol: "checkmark.circle", color: palette.accent)
-                        }
                     }
-                    .padding(.horizontal, 22)
-                    .padding(.top, 20)
-                    .padding(.bottom, 12)
+                    .padding(.horizontal, 22).padding(.bottom, 16)
                 }
                 footer
             }
-            .frame(width: 390, height: monitor.account == nil ? 440 : 660)
+            .frame(minWidth: 390, maxWidth: flexibleSize ? .infinity : 390)
+            .frame(height: flexibleSize ? nil : min(monitor.account == nil ? 440 : 660, maximumHeight))
+            .frame(minHeight: flexibleSize ? 360 : nil)
             .background(palette.background)
             .foregroundStyle(.primary)
             .tint(palette.accent)
@@ -79,12 +81,16 @@ private struct DashboardContent: View {
         .sheet(isPresented: $showingExpirySettings, onDismiss: finishExpiryReviewDismissal) {
             CreditExpirySettingsView(monitor: monitor)
         }
+        .sheet(isPresented: $showingHelloSettings, onDismiss: finishExpiryReviewDismissal) {
+            AutomaticHelloSettingsView(monitor: monitor)
+        }
         .onChange(of: monitor.expiryReview, initial: true) { _, review in
             guard handlesExpiryReminders, let review else { return }
             expiryReviewQueue.enqueue(review, dismissingSheet:
-                showingExpirySettings || showingMenuBarSettings || resetConfirmation != nil)
+                showingExpirySettings || showingMenuBarSettings || showingHelloSettings || resetConfirmation != nil)
             if showingExpirySettings { showingExpirySettings = false }
             else if showingMenuBarSettings { showingMenuBarSettings = false }
+            else if showingHelloSettings { showingHelloSettings = false }
             else if resetConfirmation != nil { resetConfirmation = nil }
             else { showPendingExpiryReview() }
         }
@@ -102,7 +108,7 @@ private struct DashboardContent: View {
         .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didWakeNotification)) { _ in
             Task { await monitor.refresh() }
         }
-        .task { await monitor.refresh() }
+        .task { await monitor.refresh(); await monitor.processAutomaticHello() }
     }
 
     private func finishExpiryReviewDismissal() {
@@ -111,7 +117,7 @@ private struct DashboardContent: View {
     }
 
     private func showPendingExpiryReview() {
-        guard handlesExpiryReminders, !showingExpirySettings, !showingMenuBarSettings,
+        guard handlesExpiryReminders, !showingExpirySettings, !showingMenuBarSettings, !showingHelloSettings,
               resetConfirmation == nil else { return }
         if let target = expiryReviewQueue.nextConfirmation(using: monitor) {
             resetConfirmation = target
@@ -132,17 +138,19 @@ private struct DashboardContent: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 5) {
                 Text("Codex Watcher").font(.system(size: 19, weight: .semibold))
-                HStack(spacing: 7) {
-                    Text(monitor.account?.email ?? "掌握额度，安排节奏")
-                        .font(.caption).foregroundStyle(.secondary)
-                        .lineLimit(1).truncationMode(.middle)
-                        .privacyMasked(privacyMode && monitor.account != nil)
-                    if let account = monitor.account {
+                if let account = monitor.account {
+                    HStack(spacing: 7) {
+                        if let email = account.email {
+                            Text(email)
+                                .font(.caption).foregroundStyle(.secondary)
+                                .lineLimit(1).truncationMode(.middle)
+                                .privacyMasked(privacyMode)
+                        }
                         Text(account.planDisplayName)
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(palette.accent)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.secondary)
                             .padding(.horizontal, 7).padding(.vertical, 3)
-                            .background(palette.accent.opacity(0.12), in: Capsule())
+                            .background(Color.primary.opacity(0.055), in: Capsule())
                     }
                 }
             }
@@ -166,9 +174,6 @@ private struct DashboardContent: View {
         VStack(spacing: 18) {
             Image(systemName: "chart.line.uptrend.xyaxis.circle")
                 .font(.system(size: 56, weight: .ultraLight)).foregroundStyle(palette.accent)
-            Text("让用量跟上你的节奏").font(.title3.weight(.semibold))
-            Text("连接 ChatGPT 账号，查看剩余额度、\n时间进度与重置卡有效期。")
-                .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
             if monitor.loginID != nil {
                 Label("等待浏览器完成登录…", systemImage: "safari").font(.callout)
                 HStack {
@@ -183,91 +188,121 @@ private struct DashboardContent: View {
                         .frame(maxWidth: .infinity).padding(.vertical, 5)
                 }.buttonStyle(.borderedProminent).disabled(monitor.isBusy)
             }
-            Text("在官方页面登录 · 凭证保存在本机")
-                .font(.caption2).foregroundStyle(.secondary)
+            if !monitor.executableAvailable {
+                HStack(spacing: 16) {
+                    Button("选择 Codex CLI…") { Task { await monitor.chooseExecutable() } }
+                        .disabled(monitor.isBusy || monitor.loginID != nil)
+                    Link("安装帮助", destination: URL(string: "https://github.com/ximatai/CodexWatcher#下载与安装")!)
+                }.font(.callout)
+            }
         }.frame(maxWidth: .infinity).padding(.vertical, 16)
     }
 
-    private func usageSection(_ window: UsageWindow, date: Date) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Text(format.quotaDuration(window.quota.windowDurationMins)).font(.headline)
-                Spacer()
-                if monitor.isStale(at: date) {
-                    Label("待更新", systemImage: "clock").font(.caption).foregroundStyle(palette.warning)
-                }
-                if monitor.windows.count > 1 {
-                    Picker("额度", selection: Binding(get: { monitor.selectedWindow?.id ?? "" },
-                                                     set: { monitor.selectedWindowID = $0 })) {
-                        ForEach(monitor.windows) { item in
-                            Text("\(item.name) · \(format.quotaDuration(item.quota.windowDurationMins))").tag(item.id)
-                        }
-                    }.labelsHidden().frame(maxWidth: 210)
-                }
-            }
-            HStack(spacing: 20) {
-                quotaNumber("已用", value: format.percent(window.quota.usedPercent), color: .primary)
-                Rectangle().fill(palette.separator).frame(width: 1, height: 54)
-                quotaNumber("剩余额度", value: format.percent(max(0, 100 - window.quota.usedPercent)), color: palette.accent)
-            }
-            let standard = window.quota.standardPercent(at: date)
-            VStack(alignment: .leading, spacing: 7) {
-                GeometryReader { geometry in
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(palette.track).frame(height: 8)
-                        Capsule().fill(palette.accent)
-                            .frame(width: geometry.size.width * min(100, max(0, window.quota.usedPercent)) / 100, height: 8)
-                        if let standard {
-                            Capsule().fill(Color.primary.opacity(0.8)).frame(width: 2, height: 15)
-                                .offset(x: min(geometry.size.width - 2, geometry.size.width * standard / 100))
-                        }
-                    }.frame(height: 16)
-                }.frame(height: 16)
-                Text("刻度表示自然时间进度")
-                    .font(.system(size: 10)).foregroundStyle(.secondary)
-            }
-            HStack(alignment: .top, spacing: 20) {
-                VStack(alignment: .leading, spacing: 5) {
-                    Text("标准用量").font(.caption).foregroundStyle(.secondary)
-                    Text(standard.map { format.percent($0, decimals: 1) } ?? "暂不可算")
-                        .font(.system(size: 22, weight: .semibold)).monospacedDigit()
-                }.frame(maxWidth: .infinity, alignment: .leading)
-                let deviation = monitor.isStale(at: date) ? nil : window.quota.deviation(at: date)
-                VStack(alignment: .leading, spacing: 5) {
-                    Text("用量偏移").font(.caption).foregroundStyle(.secondary)
-                    HStack(alignment: .firstTextBaseline, spacing: 4) {
-                        Text(deviation.map { format.number($0, decimals: 1, signed: true) } ?? "待更新")
-                            .font(.system(size: 22, weight: .semibold)).monospacedDigit()
-                        if deviation != nil { Text("个百分点").font(.system(size: 10)) }
-                    }.foregroundStyle((deviation ?? 0) > 5 ? palette.warning : palette.accent)
-                }.frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .help("标准用量按自然时间均匀分配，包含睡眠和休息时间。正偏移表示消耗超前。")
-            separator
-            if let reset = window.quota.resetDate {
-                HStack(alignment: .top, spacing: 20) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("下次重置时间").font(.caption).foregroundStyle(.secondary)
-                        Text(format.date(reset)).font(.system(size: 12, weight: .medium))
-                            .lineLimit(1).minimumScaleFactor(0.8)
-                            .help(format.date(reset, precise: true))
-                    }.frame(maxWidth: .infinity, alignment: .leading)
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("距离重置还有").font(.caption).foregroundStyle(.secondary)
-                        Text(reset > date ? format.duration(reset.timeIntervalSince(date)) : "等待更新")
-                            .font(.system(size: 13, weight: .semibold)).foregroundStyle(palette.accent)
-                    }.frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
-        }
+    private func windowTitle(_ window: UsageWindow) -> String {
+        let duration = format.quotaDuration(window.quota.windowDurationMins)
+        return Set(monitor.windows.map(\.bucketID)).count > 1 ? "\(window.name) · \(duration)" : duration
     }
 
-    private func quotaNumber(_ title: String, value: String, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(title).font(.caption).foregroundStyle(.secondary)
-            Text(value).font(.system(size: 46, weight: .semibold))
-                .monospacedDigit().foregroundStyle(color).lineLimit(1).minimumScaleFactor(0.7)
-        }.frame(maxWidth: .infinity, alignment: .leading)
+    private func usageSection(_ window: UsageWindow, date: Date) -> some View {
+        let stale = monitor.isStale(at: date)
+        let standard = window.quota.standardPercent(at: date)
+        let deviation = stale ? nil : window.quota.deviation(at: date)
+        return VStack(alignment: .leading, spacing: 14) {
+            if monitor.windows.count > 1 {
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
+                    ForEach(monitor.windows) { item in
+                        let selected = item.id == window.id
+                        Button { monitor.selectedWindowID = item.id } label: {
+                            HStack(spacing: 8) {
+                                VStack(alignment: .leading, spacing: 5) {
+                                    Text(windowTitle(item)).font(.system(size: 11, weight: .medium))
+                                        .lineLimit(2).multilineTextAlignment(.leading)
+                                    Text(format.percent(item.quota.usedPercent))
+                                        .font(.system(size: 18, weight: .semibold)).monospacedDigit()
+                                }
+                                Spacer(minLength: 0)
+                                if selected {
+                                    Image(systemName: "checkmark").font(.caption.weight(.semibold))
+                                        .foregroundStyle(palette.accent)
+                                }
+                            }
+                            .foregroundStyle(.primary)
+                            .padding(10).frame(maxWidth: .infinity, alignment: .leading)
+                            .background(selected ? palette.selectedSurface : palette.surface,
+                                        in: RoundedRectangle(cornerRadius: 10))
+                            .overlay(RoundedRectangle(cornerRadius: 10)
+                                .strokeBorder(selected ? palette.selectedBorder : palette.separator))
+                        }
+                        .buttonStyle(.plain)
+                        .help("\(windowTitle(item))，已用 \(format.percent(item.quota.usedPercent))")
+                        .accessibilityLabel("\(windowTitle(item))，已用 \(format.percent(item.quota.usedPercent))")
+                        .accessibilityAddTraits(selected ? [.isSelected] : [])
+                    }
+                }
+            } else {
+                Text(windowTitle(window)).font(.headline)
+            }
+            HStack(alignment: .firstTextBaseline) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(format.percent(window.quota.usedPercent))
+                        .font(.system(size: 42, weight: .semibold)).monospacedDigit()
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                    Text("已用").font(.callout).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 8)
+                Text("剩余 \(format.percent(max(0, 100 - window.quota.usedPercent)))")
+                    .font(.callout.weight(.medium)).foregroundStyle(.secondary)
+            }
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(palette.track).frame(height: 7)
+                    Capsule().fill(palette.accent)
+                        .frame(width: geometry.size.width * min(100, max(0, window.quota.usedPercent)) / 100, height: 7)
+                    if let standard {
+                        Capsule().fill(Color.primary.opacity(0.8)).frame(width: 2, height: 15)
+                            .offset(x: min(geometry.size.width - 2, geometry.size.width * standard / 100))
+                    }
+                }.frame(height: 16)
+            }
+            .frame(height: 16)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("额度进度")
+            .accessibilityValue("已用 \(format.percent(window.quota.usedPercent))；参考进度 \(standard.map { format.percent($0) } ?? "未知")；较参考进度 \(deviation.map { format.deviation($0) } ?? "待更新")")
+            .help("刻度为参考进度，按额度周期的自然时间计算。")
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("参考进度").font(.caption).foregroundStyle(.secondary)
+                        .help("按额度周期的自然时间计算，包含睡眠和休息时间。")
+                    Text(standard.map { format.percent($0, decimals: 1) } ?? "—")
+                        .font(.system(size: 20, weight: .semibold)).monospacedDigit()
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 5) {
+                    Text(deviation.map { $0 >= 0 ? "消耗超前" : "消耗滞后" } ?? "较参考进度")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Text(deviation.map { format.deviation(abs($0), signed: false) } ?? "待更新")
+                        .font(.system(size: 16, weight: .semibold)).monospacedDigit()
+                        .foregroundStyle(palette.deviationColor(deviation))
+                }
+            }
+            .help("实际用量减去参考进度，单位为百分点。")
+            if let reset = window.quota.resetDate {
+                HStack(alignment: .firstTextBaseline) {
+                    Label(reset > date ? "\(format.duration(reset.timeIntervalSince(date)))后重置" : "等待重置更新",
+                          systemImage: "arrow.clockwise")
+                        .font(.system(size: 12, weight: .medium))
+                    Spacer(minLength: 8)
+                    Text(format.compactDate(reset)).font(.system(size: 11)).foregroundStyle(.secondary)
+                }.help(format.date(reset, precise: true))
+            }
+            if stale && monitor.errorMessage == nil {
+                HStack {
+                    Label("数据待更新", systemImage: "clock").foregroundStyle(palette.warning)
+                    Spacer()
+                    Button("刷新") { Task { await monitor.refresh() } }.disabled(monitor.isBusy)
+                }.font(.caption)
+            }
+        }
     }
 
     private func creditsSection(date: Date) -> some View {
@@ -275,15 +310,25 @@ private struct DashboardContent: View {
             HStack {
                 Text("重置卡").font(.headline)
                 Spacer()
+                Button { showingExpirySettings = true } label: {
+                    Image(systemName: monitor.expiryConfiguration.mode == .automatic ? "bolt.badge.clock" : "bell")
+                }
+                .buttonStyle(.plain).foregroundStyle(.secondary)
+                .help(monitor.expiryStatusTitle).accessibilityLabel("重置卡临期处理，\(monitor.expiryStatusTitle)")
                 Text(monitor.snapshot?.rateLimitResetCredits.map { "\(format.number(Double($0.availableCount))) 张可用" } ?? "信息未提供")
                     .font(.caption).foregroundStyle(.secondary)
             }
-            if let message = monitor.expiryHandlingMessage {
-                Text(message).font(.caption).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+            if monitor.expiryConfiguration.mode != .off {
+                HStack {
+                    Text(monitor.expiryStatusTitle)
+                    Spacer()
+                    if let retryDate = monitor.automaticRetryDate {
+                        Text("最早 \(format.date(retryDate, timeOnly: true))")
+                    }
+                }.font(.caption).foregroundStyle(.secondary)
             }
             if monitor.pendingRedemption != nil {
-                statusMessage("上次重置结果尚未确认，请先核实。", symbol: "exclamationmark.circle", color: palette.warning)
+                statusMessage("上次重置结果未确认", symbol: "exclamationmark.circle", color: palette.warning)
                 Button("重试上次重置") {
                     resetConfirmation = monitor.makeResetConfirmation(for: nil)
                 }.disabled(monitor.isBusy)
@@ -326,7 +371,7 @@ private struct DashboardContent: View {
                     if let urgency {
                         let color = palette.creditExpiryColor(urgency)
                         Text(urgency.title)
-                            .font(.system(size: 8, weight: .medium))
+                            .font(.system(size: 10, weight: .medium))
                             .foregroundStyle(color)
                             .padding(.horizontal, 5).padding(.vertical, 2)
                             .background(color.opacity(0.12), in: Capsule())
@@ -334,18 +379,19 @@ private struct DashboardContent: View {
                     }
                 }
                 if let expiry = credit.expiryDate {
-                    Text(expiry > date ? "\(format.date(expiry)) 到期" : "已到期，等待刷新")
+                    Text(expiry > date ? "\(format.compactDate(expiry)) 到期" : "已到期，等待刷新")
                         .foregroundStyle(.secondary)
                         .help(format.date(expiry, precise: true))
                 } else { Text("有效期未提供").foregroundStyle(.secondary) }
-            }.font(.system(size: 10)).frame(maxWidth: .infinity, alignment: .leading)
+            }.font(.system(size: 11)).frame(maxWidth: .infinity, alignment: .leading)
             Button("使用") { resetConfirmation = monitor.makeResetConfirmation(for: credit) }
                 .font(.system(size: 11, weight: .medium))
                 .buttonStyle(.bordered).controlSize(.small).tint(.secondary)
                 .modifier(ControlHoverFeedback(color: palette.accent))
-                .disabled(monitor.isBusy || !monitor.canRedeem || !credit.isUsable(at: date)
-                          || monitor.pendingRedemption != nil || monitor.isStale(at: date))
-                .help("查看当前用量与卡片有效期，确认后使用")
+                .disabled(monitor.redemptionBlockingReason(for: credit, at: date) != nil)
+                .help(monitor.redemptionBlockingReason(for: credit, at: date) ?? "查看并确认使用")
+                .accessibilityLabel("使用\(format.creditTitle(credit.title))")
+                .accessibilityHint(monitor.redemptionBlockingReason(for: credit, at: date) ?? "打开确认页")
         }
         .padding(.horizontal, 12).padding(.vertical, 10)
     }
@@ -355,20 +401,60 @@ private struct DashboardContent: View {
             .fixedSize(horizontal: false, vertical: true)
     }
 
+    @ViewBuilder private var feedback: some View {
+        if monitor.isRedeeming {
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text("正在重置…").font(.callout)
+                Spacer()
+            }
+        }
+        if let notice = monitor.notice {
+            HStack(alignment: .top) {
+                statusMessage(notice,
+                              symbol: monitor.noticeKind == .success ? "checkmark.circle" : (monitor.noticeKind == .warning ? "exclamationmark.circle" : "info.circle"),
+                              color: monitor.noticeKind == .success ? palette.accent : (monitor.noticeKind == .warning ? palette.warning : .secondary))
+                Spacer(minLength: 8)
+                Button { monitor.dismissNotice() } label: {
+                    Image(systemName: "xmark").font(.caption).frame(width: 20, height: 20)
+                }.buttonStyle(.plain).foregroundStyle(.secondary).accessibilityLabel("关闭提示")
+            }
+        }
+        if let error = monitor.errorMessage {
+            VStack(alignment: .leading, spacing: 8) {
+                statusMessage(error, symbol: "exclamationmark.triangle", color: palette.warning)
+                HStack(spacing: 14) {
+                    if !monitor.executableAvailable {
+                        Button("选择 CLI…") { Task { await monitor.chooseExecutable() } }
+                            .disabled(monitor.isBusy || monitor.loginID != nil)
+                    } else {
+                        Button("重新读取") { Task { await monitor.refresh() } }.disabled(monitor.isBusy)
+                    }
+                }.font(.caption)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(10).background(palette.warning.opacity(0.07), in: RoundedRectangle(cornerRadius: 8))
+        }
+    }
+
     private var footer: some View {
         VStack(spacing: 0) {
             separator.padding(.horizontal, 22)
             HStack(alignment: .center, spacing: 8) {
-                VStack(alignment: .leading, spacing: 3) {
+                Group {
                     if let updated = monitor.lastUpdated {
                         Text("更新于 \(format.date(updated, timeOnly: Calendar.autoupdatingCurrent.isDateInToday(updated)))")
+                    } else {
+                        Text(monitor.isBusy ? "正在连接…" : "尚未连接")
                     }
-                    Text("每 5 分钟刷新 · 独立第三方工具")
-                }.font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+                .font(.system(size: 11)).foregroundStyle(.secondary)
+                .help(monitor.expiryConfiguration.mode == .off && !monitor.automaticHelloConfiguration.enabled ? "每 5 分钟刷新" : "自动处理每 30 秒检查并刷新")
                 Spacer(minLength: 0)
                 Menu {
                     Button("状态栏显示…") { showingMenuBarSettings = true }
                     Button("重置卡临期处理…") { showingExpirySettings = true }
+                    Button("满额自动 hello…") { showingHelloSettings = true }
                     Toggle(isOn: $privacyMode) { Label("隐藏邮箱", systemImage: "eye.slash") }
                     Picker("外观", selection: $appearance) {
                         ForEach(AppAppearance.allCases) { option in
@@ -384,17 +470,22 @@ private struct DashboardContent: View {
                     Divider()
                     Button("打开独立窗口", action: openDashboard)
                     Button("选择 Codex CLI…") { Task { await monitor.chooseExecutable() } }
+                        .disabled(monitor.isBusy || monitor.loginID != nil)
                     if monitor.account != nil {
                         Divider()
                         Button("退出账号") { Task { await monitor.logout() } }
+                            .disabled(monitor.isBusy || monitor.loginID != nil)
                     }
+                    Divider()
+                    Button("使用帮助") { NSWorkspace.shared.open(URL(string: "https://github.com/ximatai/CodexWatcher/blob/main/docs/USAGE.md")!) }
+                    Button("关于 Codex Watcher") { NSApp.orderFrontStandardAboutPanel(nil) }
                 } label: {
-                    Image(systemName: "gearshape").font(.system(size: 14))
+                    Image(systemName: "gearshape").font(.system(size: 14)).foregroundStyle(.secondary)
                 }
-                .menuStyle(.borderlessButton).fixedSize()
+                .menuStyle(.borderlessButton).tint(.secondary).fixedSize()
                 .accessibilityIdentifier("dashboard-settings")
                 .modifier(ControlHoverFeedback(color: palette.accent))
-                .disabled(monitor.isBusy || monitor.loginID != nil).help("设置与外观")
+                .help("设置与外观").accessibilityLabel("设置与外观")
                 Button { NSApplication.shared.terminate(nil) } label: {
                     Image(systemName: "power").font(.system(size: 14)).frame(width: 28, height: 28)
                 }.buttonStyle(.plain).foregroundStyle(.secondary).help("退出应用").accessibilityLabel("退出应用")
@@ -409,7 +500,7 @@ private struct DashboardContent: View {
                     }
             }
             .padding(.horizontal, 22)
-            .frame(height: 54)
+            .frame(height: 48)
         }
         .background(palette.background)
     }

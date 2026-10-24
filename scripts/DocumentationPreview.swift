@@ -30,14 +30,21 @@ struct DocumentationPreview {
           case "$line" in
             *initialized*) continue ;;
             *initialize*) result='{}' ;;
-            *account*rateLimits*read*) result=$(/bin/cat "$fixture_dir/usage.json") ;;
-            *account*read*) result='{"account":{"type":"chatgpt","email":"demo@example.com","planType":"pro"}}' ;;
+            *account*rateLimits*read*)
+              if [ -f "$fixture_dir/reject-usage" ]; then
+                printf '{"id":%s,"error":{"code":-32000}}\n' "$id"
+                continue
+              fi
+              result=$(/bin/cat "$fixture_dir/usage.json") ;;
+            *account*read*) result=$(/bin/cat "$fixture_dir/account.json") ;;
             *) printf '{"id":%s,"error":{"code":-32601}}\n' "$id"; continue ;;
           esac
           printf '{"id":%s,"result":%s}\n' "$id" "$result"
         done
         """#
         try Data(script.utf8).write(to: executable)
+        try Data(#"{"account":{"type":"chatgpt","email":"demo@example.com","planType":"pro"}}"#.utf8)
+            .write(to: temporary.appendingPathComponent("account.json"))
         try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: executable.path)
         let now = Date().timeIntervalSince1970
         var calendar = Calendar(identifier: .gregorian)
@@ -53,7 +60,8 @@ struct DocumentationPreview {
             .init(id: "demo-card-3", resetType: "codexRateLimits", status: "available",
                   grantedAt: now - 86400, expiresAt: now + 2 * 86400, title: "Full reset", description: nil)
         ])
-        let bucket = LimitBucket(limitId: "codex", limitName: "Codex", planType: "pro", primary: quota, secondary: nil)
+        let shortQuota = QuotaWindow(usedPercent: 84, windowDurationMins: 300, resetsAt: now + 5400)
+        let bucket = LimitBucket(limitId: "codex", limitName: "Codex", planType: "pro", primary: shortQuota, secondary: quota)
         let snapshot = UsageSnapshot(accountId: "documentation-demo", rateLimits: bucket,
                                      rateLimitsByLimitId: nil, rateLimitResetCredits: credits)
         try JSONEncoder().encode(snapshot).write(to: temporary.appendingPathComponent("usage.json"))
@@ -71,9 +79,21 @@ struct DocumentationPreview {
                              size: NSSize(width: 390, height: 660), dark: dark,
                              to: output.appendingPathComponent(dark ? "dashboard-dark.png" : "dashboard-light.png"))
         }
+        let shortOnly = UsageSnapshot(accountId: "documentation-demo",
+            rateLimits: LimitBucket(limitId: "codex", limitName: "Codex", planType: "pro", primary: shortQuota, secondary: nil),
+            rateLimitsByLimitId: nil, rateLimitResetCredits: credits)
+        monitor.selectedWindowID = "codex.secondary"
+        defaults.set("light", forKey: "appearance")
+        try JSONEncoder().encode(shortOnly).write(to: temporary.appendingPathComponent("usage.json"))
+        await monitor.refresh()
+        try await render(ContentView(monitor: monitor).defaultAppStorage(defaults),
+                         size: NSSize(width: 390, height: 660), dark: false,
+                         to: output.appendingPathComponent("dashboard-pro-short-only.png"))
+        try JSONEncoder().encode(snapshot).write(to: temporary.appendingPathComponent("usage.json"))
+        await monitor.refresh()
         defaults.set("light", forKey: "appearance")
         try await render(MenuBarSettingsView(monitor: monitor).defaultAppStorage(defaults),
-                         size: NSSize(width: 420, height: 365), dark: false,
+                         size: NSSize(width: 380, height: 280), dark: false,
                          to: output.appendingPathComponent("menu-bar-settings.png"))
         let format = PresentationFormat(locale: Locale(identifier: "zh_CN"), timeZone: TimeZone(identifier: "Asia/Shanghai")!)
         try await render(ResetConfirmationContent(isRetry: false, cardTitle: "完整额度重置卡",
@@ -91,7 +111,38 @@ struct DocumentationPreview {
         try await render(CreditExpirySettingsView(monitor: monitor).defaultAppStorage(defaults),
                          size: NSSize(width: 380, height: 250), dark: true,
                          to: output.appendingPathComponent("credit-expiry-automatic.png"))
-        print("Exported six previews with fictional data; no real account, notification permission or reset was used.")
+        await monitor.configureExpiryHandling(.off)
+        defaults.set("light", forKey: "appearance")
+        try await render(AutomaticHelloSettingsView(monitor: monitor).defaultAppStorage(defaults),
+                         size: NSSize(width: 380, height: 240), dark: false,
+                         to: output.appendingPathComponent("automatic-hello-off.png"))
+        if let target = monitor.defaultHelloWindow,
+           let authorization = monitor.makeAutomaticHelloAuthorization(windowID: target.id) {
+            monitor.configureAutomaticHello(true, authorization: authorization)
+        }
+        defaults.set("dark", forKey: "appearance")
+        try await render(AutomaticHelloSettingsView(monitor: monitor).defaultAppStorage(defaults),
+                         size: NSSize(width: 380, height: 260), dark: true,
+                         to: output.appendingPathComponent("automatic-hello-on.png"))
+        monitor.configureAutomaticHello(false)
+        defaults.set("light", forKey: "appearance")
+        try await render(ContentView(monitor: monitor, maximumHeight: 440).defaultAppStorage(defaults),
+                         size: NSSize(width: 390, height: 440), dark: false,
+                         to: output.appendingPathComponent("dashboard-compact.png"))
+        try await render(ContentView(monitor: monitor, flexibleSize: true).defaultAppStorage(defaults),
+                         size: NSSize(width: 600, height: 740), dark: false,
+                         to: output.appendingPathComponent("dashboard-expanded.png"))
+        try Data().write(to: temporary.appendingPathComponent("reject-usage"))
+        await monitor.refresh()
+        try await render(ContentView(monitor: monitor).defaultAppStorage(defaults),
+                         size: NSSize(width: 390, height: 660), dark: false,
+                         to: output.appendingPathComponent("dashboard-offline.png"))
+        try Data(#"{"account":null}"#.utf8).write(to: temporary.appendingPathComponent("account.json"))
+        await monitor.refresh()
+        try await render(ContentView(monitor: monitor).defaultAppStorage(defaults),
+                         size: NSSize(width: 390, height: 440), dark: false,
+                         to: output.appendingPathComponent("welcome.png"))
+        print("Exported thirteen previews with fictional data; no real account, model call, notification permission or reset was used.")
     }
 
     @MainActor static func render<V: View>(_ view: V, size: NSSize, dark: Bool, to url: URL) async throws {

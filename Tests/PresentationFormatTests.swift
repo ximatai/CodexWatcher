@@ -64,6 +64,16 @@ final class PresentationFormatTests: XCTestCase {
         XCTAssertTrue(china.date(date, timeOnly: true).contains("14:32"))
     }
 
+    func testCompactDateKeepsYearAcrossCalendarBoundaryAndUsesLocalTime() throws {
+        let parser = ISO8601DateFormatter()
+        let reference = try XCTUnwrap(parser.date(from: "2026-12-31T23:30:00+08:00"))
+        let nextYear = try XCTUnwrap(parser.date(from: "2027-01-01T01:32:00+08:00"))
+        let format = PresentationFormat(locale: Locale(identifier: "en_GB"), timeZone: shanghai)
+        XCTAssertFalse(format.compactDate(reference, relativeTo: reference).contains("2026"))
+        XCTAssertTrue(format.compactDate(nextYear, relativeTo: reference).contains("2027"))
+        XCTAssertTrue(format.compactDate(nextYear, relativeTo: reference).contains("01:32"))
+    }
+
     func testKnownCardLabelsAreLocalizedAndUnknownTitlesSurvive() {
         let format = PresentationFormat(locale: Locale(identifier: "zh_CN"), timeZone: shanghai)
         XCTAssertEqual(format.creditTitle("Full reset"), "完整额度重置卡")

@@ -87,7 +87,8 @@ final class WatcherAppDelegate: NSObject, NSApplicationDelegate {
             finishReleaseSmokeTest()
             return
         }
-        guard monitor.expiryConfiguration.mode == .off, notifications.permissionRequests == 0,
+        guard monitor.expiryConfiguration.mode == .off, !monitor.automaticHelloConfiguration.enabled,
+              notifications.permissionRequests == 0,
               notifications.delivered.isEmpty else { finishReleaseSmokeTest(); return }
         for appearance in [AppAppearance.light, .dark, .system] { appearance.apply(to: NSApp) }
         guard await statusController?.verifyPopoverForSmokeTest() == true else {
@@ -144,12 +145,14 @@ final class WatcherAppDelegate: NSObject, NSApplicationDelegate {
         statusController?.closePopover()
         if dashboard == nil {
             let hosting = NSHostingController(rootView: ContentView(monitor: monitor,
-                handlesExpiryReminders: true, openDashboard: { [weak self] in self?.showDashboard() }))
-            hosting.sizingOptions = [.minSize, .maxSize]
+                handlesExpiryReminders: true, openDashboard: { [weak self] in self?.showDashboard() }, flexibleSize: true))
+            hosting.sizingOptions = [.minSize]
             let window = NSWindow(contentViewController: hosting)
             window.title = "Codex Watcher"
             window.identifier = NSUserInterfaceItemIdentifier("dashboard")
-            window.styleMask = [.titled, .closable, .miniaturizable]
+            window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
+            let height = min(680, (NSScreen.main?.visibleFrame.height ?? 760) - 60)
+            window.setContentSize(NSSize(width: 420, height: max(360, height)))
             window.isReleasedWhenClosed = false
             window.center()
             dashboard = window

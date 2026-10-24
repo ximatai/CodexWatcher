@@ -34,7 +34,8 @@ final class UsageMonitorTests: XCTestCase {
             while IFS= read -r line; do
               printf '%s\n' "$line" >> "$fixture_dir/requests.jsonl"
               id=$(printf '%s' "$line" | /usr/bin/sed -n 's/.*"id":\([0-9][0-9]*\).*/\1/p')
-              case "$line" in
+              method=$(printf '%s' "$line" | /usr/bin/sed -n 's/.*"method":"\([^"]*\)".*/\1/p')
+              case "$method" in
                 *initialized*) continue ;;
                 *initialize*) result='{}' ;;
                 *account*rateLimits*read*)
@@ -52,6 +53,24 @@ final class UsageMonitorTests: XCTestCase {
                     /bin/cp "$fixture_dir/next-usage.json" "$fixture_dir/usage.json"
                   fi
                   result=$(/bin/cat "$fixture_dir/account.json") ;;
+                *model*list*)
+                  result='{"data":[{"model":"fixture-model","isDefault":true,"hidden":false,"supportedReasoningEfforts":[{"reasoningEffort":"low"}]}],"nextCursor":null}' ;;
+                *thread*start*)
+                  if [ -f "$fixture_dir/delay-hello-prepare" ]; then /bin/sleep 0.3; fi
+                  if [ -f "$fixture_dir/change-hello-account" ]; then
+                    /bin/cp "$fixture_dir/next-account.json" "$fixture_dir/account.json"
+                    /bin/cp "$fixture_dir/next-usage.json" "$fixture_dir/usage.json"
+                  fi
+                  result='{"thread":{"id":"hello-thread","ephemeral":true},"modelProvider":"openai"}' ;;
+                *turn*start*)
+                  if [ ! -f "$fixture_dir/State/automatic-hello.json" ]; then
+                    printf '{"id":%s,"error":{"code":-32001}}\n' "$id"; continue
+                  fi
+                  if [ -f "$fixture_dir/hang-hello" ]; then continue; fi
+                  if [ -f "$fixture_dir/post-hello.json" ]; then /bin/cp "$fixture_dir/post-hello.json" "$fixture_dir/usage.json"; fi
+                  printf '{"id":%s,"result":{"turn":{"id":"hello-turn","status":"inProgress"}}}\n' "$id"
+                  printf '{"method":"turn/completed","params":{"threadId":"hello-thread","turn":{"id":"hello-turn","status":"completed"}}}\n'
+                  continue ;;
                 *account*logout*)
                   if [ -f "$fixture_dir/reject-logout" ]; then
                     printf '{"id":%s,"error":{"code":-32000}}\n' "$id"
@@ -65,7 +84,12 @@ final class UsageMonitorTests: XCTestCase {
                     continue
                   fi
                   if [ -f "$fixture_dir/hang-consume" ]; then continue; fi
-                  result='{"outcome":"reset"}' ;;
+                  if [ -f "$fixture_dir/reject-after-consume" ]; then /usr/bin/touch "$fixture_dir/reject-usage"; fi
+                  if [ -f "$fixture_dir/nothing-to-reset" ]; then
+                    result='{"outcome":"nothingToReset"}'
+                  else
+                    result='{"outcome":"reset"}'
+                  fi ;;
                 *) printf '{"id":%s,"error":{"code":-32601}}\n' "$id"; continue ;;
               esac
               printf '{"id":%s,"result":%s}\n' "$id" "$result"
@@ -138,11 +162,179 @@ final class UsageMonitorTests: XCTestCase {
             }
         }
 
+        func helloRequests() throws -> [[String: Any]] {
+            let content = try String(contentsOf: directory.appendingPathComponent("requests.jsonl"), encoding: .utf8)
+            return try content.split(separator: "\n").compactMap { line in
+                let object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any])
+                return object["method"] as? String == "turn/start" ? object : nil
+            }
+        }
+
+        func enableHello() throws {
+            let authorization = try XCTUnwrap(monitor.makeAutomaticHelloAuthorization(windowID: "codex.primary"))
+            monitor.configureAutomaticHello(true, authorization: authorization)
+            XCTAssertTrue(monitor.automaticHelloConfiguration.enabled)
+        }
+
         func cleanup() {
             monitor.shutdown()
             defaults.removePersistentDomain(forName: suite)
             try? FileManager.default.removeItem(at: directory)
         }
+    }
+
+    func testAutomaticHelloDefaultsOffAndOnlyFullRawUsageCanTrigger() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.writeUsage(usedPercent: 0)
+        try await fixture.refresh()
+        XCTAssertFalse(fixture.monitor.automaticHelloConfiguration.enabled)
+        await fixture.monitor.processAutomaticHello()
+        XCTAssertTrue(try fixture.helloRequests().isEmpty)
+        try fixture.enableHello()
+        try fixture.writeUsage(usedPercent: 0.01)
+        await fixture.monitor.processAutomaticHello()
+        XCTAssertTrue(try fixture.helloRequests().isEmpty)
+        try fixture.writeUsage(usedPercent: 0)
+        await fixture.monitor.processAutomaticHello()
+        XCTAssertEqual(try fixture.helloRequests().count, 1)
+        XCTAssertEqual(fixture.monitor.automaticHelloRecord?.outcome, "completed", fixture.monitor.automaticHelloMessage ?? "No error")
+        let params = try XCTUnwrap(fixture.helloRequests().first?["params"] as? [String: Any])
+        let input = try XCTUnwrap(params["input"] as? [[String: Any]])
+        XCTAssertEqual(input.first?["text"] as? String, "hello")
+        XCTAssertEqual(params["approvalPolicy"] as? String, "never")
+        XCTAssertTrue(try fixture.consumeRequests().isEmpty)
+    }
+
+    func testHelloStaysLatchedAcrossFullReadTimeChangeToggleAndRestart() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.writeUsage(usedPercent: 0)
+        try await fixture.refresh()
+        try fixture.enableHello()
+        await fixture.monitor.processAutomaticHello()
+        try fixture.writeUsage(usedPercent: 0) // A different future resetsAt must not trigger another turn.
+        await fixture.monitor.processAutomaticHello()
+        fixture.monitor.configureAutomaticHello(false)
+        try fixture.enableHello()
+        await fixture.monitor.processAutomaticHello()
+        let restarted = UsageMonitor(client: AppServerClient(executablePath: fixture.client.executablePath,
+            runtimeDirectory: fixture.client.runtimeDirectory), defaults: fixture.defaults)
+        defer { restarted.shutdown() }
+        await restarted.processAutomaticHello()
+        XCTAssertEqual(try fixture.helloRequests().count, 1)
+    }
+
+    func testHelloRearmsAfterLaterUsageAndNonNaturalReturnToFull() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.writeUsage(usedPercent: 0)
+        try await fixture.refresh()
+        try fixture.enableHello()
+        await fixture.monitor.processAutomaticHello()
+        try fixture.writeUsage(usedPercent: 0.2) // Ignore the greeting's own small use.
+        await fixture.monitor.processAutomaticHello()
+        try fixture.writeUsage(usedPercent: 0)
+        await fixture.monitor.processAutomaticHello()
+        XCTAssertEqual(try fixture.helloRequests().count, 1)
+        try fixture.writeUsage(usedPercent: 15)
+        await fixture.monitor.processAutomaticHello()
+        try fixture.writeUsage(usedPercent: 0) // Future deadline: externally reset quota.
+        await fixture.monitor.processAutomaticHello()
+        XCTAssertEqual(try fixture.helloRequests().count, 2)
+    }
+
+    func testHelloUnknownResultIsNotAutomaticallyRetried() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.writeUsage(usedPercent: 0)
+        try await fixture.refresh()
+        try fixture.enableHello()
+        try fixture.marker("hang-hello")
+        await fixture.monitor.processAutomaticHello()
+        XCTAssertEqual(fixture.monitor.automaticHelloRecord?.outcome, "unknown")
+        try fixture.removeMarker("hang-hello")
+        await fixture.monitor.processAutomaticHello()
+        XCTAssertEqual(try fixture.helloRequests().count, 1)
+    }
+
+    func testHelloPastDeadlineIsEligibleButMissingDeadlineAndPendingResetAreNot() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        let now = Date().timeIntervalSince1970
+        try fixture.write(["accountId": "account-a", "rateLimits": ["limitId": "codex",
+            "primary": ["usedPercent": 0, "windowDurationMins": 300]]], to: "usage.json")
+        try await fixture.refresh()
+        try fixture.enableHello()
+        await fixture.monitor.processAutomaticHello()
+        XCTAssertTrue(try fixture.helloRequests().isEmpty)
+        try fixture.write(["accountId": "account-a", "rateLimits": ["limitId": "codex",
+            "primary": ["usedPercent": 0, "windowDurationMins": 300, "resetsAt": now - 60]]], to: "usage.json")
+        let pending = try fixture.store.prepare(creditID: "card-a", owner: "account-a")
+        await fixture.monitor.processAutomaticHello()
+        XCTAssertTrue(try fixture.helloRequests().isEmpty)
+        try fixture.store.clear(owner: "account-a", idempotencyKey: pending.idempotencyKey)
+        await fixture.monitor.processAutomaticHello()
+        XCTAssertEqual(try fixture.helloRequests().count, 1)
+    }
+
+    func testHelloAuthorizationAndFinalPreflightCannotFollowAnotherAccount() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.writeUsage(usedPercent: 0)
+        try await fixture.refresh()
+        let authorization = try XCTUnwrap(fixture.monitor.makeAutomaticHelloAuthorization(windowID: "codex.primary"))
+        try fixture.writeAccount("account-b")
+        try fixture.writeUsage(owner: "account-b", usedPercent: 0)
+        try await fixture.refresh()
+        fixture.monitor.configureAutomaticHello(true, authorization: authorization)
+        XCTAssertFalse(fixture.monitor.automaticHelloConfiguration.enabled)
+        try fixture.writeAccount("account-a")
+        try fixture.writeUsage(usedPercent: 0)
+        try await fixture.refresh()
+        try fixture.enableHello()
+        try fixture.write(["account": ["type": "chatgpt", "email": "account-b@example.invalid"]], to: "next-account.json")
+        let usage = try Data(contentsOf: fixture.directory.appendingPathComponent("usage.json"))
+        var changed = try XCTUnwrap(JSONSerialization.jsonObject(with: usage) as? [String: Any])
+        changed["accountId"] = "account-b"
+        try fixture.write(changed, to: "next-usage.json")
+        try fixture.marker("change-hello-account")
+        await fixture.monitor.processAutomaticHello()
+        XCTAssertTrue(try fixture.helloRequests().isEmpty)
+    }
+
+    func testDisablingHelloDuringPreparationStopsInference() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.writeUsage(usedPercent: 0)
+        try await fixture.refresh()
+        try fixture.enableHello()
+        try fixture.marker("delay-hello-prepare")
+        let task = Task { await fixture.monitor.processAutomaticHello() }
+        for _ in 0..<200 {
+            let log = (try? String(contentsOf: fixture.directory.appendingPathComponent("requests.jsonl"), encoding: .utf8)) ?? ""
+            if log.contains("thread") { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        fixture.monitor.configureAutomaticHello(false)
+        await task.value
+        XCTAssertFalse(fixture.monitor.automaticHelloConfiguration.enabled)
+        XCTAssertTrue(try fixture.helloRequests().isEmpty)
+    }
+
+    func testConcurrentHelloMonitorsShareOnePersistentClaim() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.writeUsage(usedPercent: 0)
+        try await fixture.refresh()
+        try fixture.enableHello()
+        let second = UsageMonitor(client: AppServerClient(executablePath: fixture.client.executablePath,
+            runtimeDirectory: fixture.client.runtimeDirectory), defaults: fixture.defaults)
+        defer { second.shutdown() }
+        async let firstRun: Void = fixture.monitor.processAutomaticHello()
+        async let secondRun: Void = second.processAutomaticHello()
+        _ = await (firstRun, secondRun)
+        XCTAssertEqual(try fixture.helloRequests().count, 1)
     }
 
     func testAutomaticAuthorizationCannotFollowAccountChangeWhileDialogIsOpen() async throws {
@@ -343,12 +535,15 @@ final class UsageMonitorTests: XCTestCase {
         try fixture.marker("hang-consume")
         await fixture.monitor.processExpiringCredits()
         let pending = try XCTUnwrap(fixture.monitor.pendingRedemption)
+        XCTAssertEqual(fixture.monitor.expiryStatusTitle, "待重试 · 1/3")
+        XCTAssertNotNil(fixture.monitor.automaticRetryDate, "An unknown write result must retain its retry schedule")
         try fixture.removeMarker("hang-consume")
         await fixture.monitor.processExpiringCredits()
         XCTAssertEqual(try fixture.consumeRequests().count, 1)
         XCTAssertEqual(fixture.monitor.pendingRedemption?.idempotencyKey, pending.idempotencyKey)
         let retry = try XCTUnwrap(fixture.monitor.makeResetConfirmation(for: nil))
         await fixture.monitor.redeem(retry)
+        XCTAssertNil(fixture.monitor.automaticRetryDate)
         let params = try XCTUnwrap(fixture.consumeRequests().last?["params"] as? [String: Any])
         XCTAssertEqual(params["idempotencyKey"] as? String, pending.idempotencyKey)
     }
@@ -609,6 +804,111 @@ final class UsageMonitorTests: XCTestCase {
         XCTAssertTrue(fixture.monitor.canConfirmRedemption(confirmation, at: .now))
     }
 
+    func testSuccessfulResetSurvivesReadFailureAndRecoveryOnlyReads() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try await fixture.refresh()
+        let card = try XCTUnwrap(fixture.monitor.sortedCredits.first)
+        let confirmation = try XCTUnwrap(fixture.monitor.makeResetConfirmation(for: card))
+        try fixture.marker("reject-after-consume")
+        await fixture.monitor.redeem(confirmation)
+        XCTAssertEqual(fixture.monitor.notice, "重置已完成。")
+        XCTAssertEqual(fixture.monitor.noticeKind, .success)
+        XCTAssertNotNil(fixture.monitor.errorMessage)
+        XCTAssertNil(fixture.monitor.pendingRedemption)
+        XCTAssertNil(try fixture.store.pending(for: "account-a"))
+        XCTAssertEqual(try fixture.consumeRequests().count, 1)
+        XCTAssertNotNil(fixture.monitor.redemptionBlockingReason(for: card, at: .now))
+
+        try fixture.removeMarker("reject-usage")
+        await fixture.monitor.refresh()
+        XCTAssertNil(fixture.monitor.errorMessage)
+        XCTAssertEqual(fixture.monitor.notice, "重置已完成。")
+        XCTAssertEqual(try fixture.consumeRequests().count, 1, "Recovery must only read")
+        XCTAssertNil(fixture.monitor.redemptionBlockingReason(for: card, at: .now))
+    }
+
+    func testNothingToResetIsInformationalRatherThanSuccess() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try await fixture.refresh()
+        try fixture.marker("nothing-to-reset")
+        let confirmation = try XCTUnwrap(fixture.monitor.makeResetConfirmation(for: fixture.monitor.sortedCredits.first))
+        await fixture.monitor.redeem(confirmation)
+        XCTAssertEqual(fixture.monitor.noticeKind, .information)
+        XCTAssertEqual(fixture.monitor.notice, "当前没有符合条件的额度可重置。")
+        XCTAssertNil(fixture.monitor.pendingRedemption)
+        XCTAssertEqual(try fixture.consumeRequests().count, 1)
+    }
+
+    func testWindowSelectionSurvivesRefreshAndKeepsOtherWindowsAvailable() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        let now = Date().timeIntervalSince1970
+        try fixture.write([
+            "accountId": "account-a",
+            "rateLimits": ["limitId": "codex",
+                "primary": ["usedPercent": 84, "windowDurationMins": 300, "resetsAt": now + 1800],
+                "secondary": ["usedPercent": 35, "windowDurationMins": 10080, "resetsAt": now + 86400]]
+        ], to: "usage.json")
+        try await fixture.refresh()
+        XCTAssertEqual(fixture.monitor.selectedWindow?.id, "codex.secondary")
+        XCTAssertEqual(fixture.monitor.windows.count, 2)
+        fixture.monitor.selectedWindowID = "codex.primary"
+        try await fixture.refresh()
+        XCTAssertEqual(fixture.monitor.selectedWindow?.quota.usedPercent, 84)
+        XCTAssertEqual(fixture.defaults.string(forKey: "selectedWindowID"), "codex.primary")
+        XCTAssertEqual(fixture.monitor.windows.count, 2)
+        XCTAssertTrue(try fixture.consumeRequests().isEmpty)
+    }
+
+    func testProWithoutWeeklyLimitShowsOnlyReturnedShortWindow() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        let now = Date().timeIntervalSince1970
+        for explicitNull in [false, true] {
+            var bucket: [String: Any] = ["limitId": "codex",
+                "primary": ["usedPercent": 42, "windowDurationMins": 300, "resetsAt": now + 5400]]
+            if explicitNull { bucket["secondary"] = NSNull() }
+            try fixture.write(["accountId": "account-a", "rateLimits": bucket], to: "usage.json")
+            try await fixture.refresh()
+            XCTAssertEqual(fixture.monitor.account?.planDisplayName, "Pro")
+            XCTAssertEqual(fixture.monitor.windows.count, 1)
+            let selected = try XCTUnwrap(fixture.monitor.selectedWindow)
+            XCTAssertEqual(selected.id, "codex.primary")
+            XCTAssertEqual(selected.quota.windowDurationMins, 300)
+            XCTAssertEqual(selected.quota.usedPercent, 42)
+            XCTAssertNotNil(selected.quota.deviation(at: .now))
+        }
+        XCTAssertTrue(try fixture.consumeRequests().isEmpty)
+    }
+
+    func testRemovedWeeklyLimitFallsBackFromPreviousSelection() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        let now = Date().timeIntervalSince1970
+        try fixture.write([
+            "accountId": "account-a",
+            "rateLimits": ["limitId": "codex",
+                "primary": ["usedPercent": 42, "windowDurationMins": 300, "resetsAt": now + 5400],
+                "secondary": ["usedPercent": 35, "windowDurationMins": 10080, "resetsAt": now + 86400]]
+        ], to: "usage.json")
+        try await fixture.refresh()
+        fixture.monitor.selectedWindowID = "codex.secondary"
+        XCTAssertEqual(fixture.monitor.selectedWindow?.quota.windowDurationMins, 10080)
+        try fixture.write([
+            "accountId": "account-a",
+            "rateLimits": ["limitId": "codex",
+                "primary": ["usedPercent": 42, "windowDurationMins": 300, "resetsAt": now + 5400]]
+        ], to: "usage.json")
+        try await fixture.refresh()
+        XCTAssertEqual(fixture.monitor.windows.count, 1)
+        XCTAssertEqual(fixture.monitor.selectedWindow?.id, "codex.primary")
+        XCTAssertEqual(fixture.monitor.menuTitle(), PresentationFormat().percent(42))
+        XCTAssertFalse(fixture.monitor.isStale(at: .now))
+        XCTAssertTrue(try fixture.consumeRequests().isEmpty)
+    }
+
     func testLoggedOutAndChangedAccountClearPreviousUsageAndPendingOperation() async throws {
         let fixture = try Fixture()
         defer { fixture.cleanup() }
@@ -656,8 +956,10 @@ final class UsageMonitorTests: XCTestCase {
             try await Task.sleep(for: .milliseconds(5))
         }
         XCTAssertTrue(fixture.monitor.isBusy)
+        XCTAssertTrue(fixture.monitor.isRedeeming)
         await fixture.monitor.redeem(confirmation)
         await first.value
+        XCTAssertFalse(fixture.monitor.isRedeeming)
         XCTAssertEqual(try fixture.consumeRequests().count, 1)
         XCTAssertNotNil(fixture.monitor.pendingRedemption)
     }

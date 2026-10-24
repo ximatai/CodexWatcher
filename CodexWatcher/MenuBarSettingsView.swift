@@ -30,7 +30,6 @@ struct MenuBarSettingsView: View {
                 }.keyboardShortcut(.defaultAction)
             }
             VStack(spacing: 8) {
-                Text("实时预览").font(.caption).foregroundStyle(.secondary)
                 Image(nsImage: MenuBarLabelRenderer.image(title: previewTitle, symbolName: configuration.effectiveSymbol))
                     .accessibilityLabel("状态栏预览 \(previewTitle)")
             }
@@ -49,16 +48,14 @@ struct MenuBarSettingsView: View {
                 Divider().padding(.vertical, 4)
                 Toggle("已用百分比", isOn: $showUsage)
                     .disabled(icon == MenuBarIcon.none.rawValue && showUsage && textCount == 1)
-                Toggle("时间进度", isOn: $showTimeProgress)
+                Toggle("参考进度", isOn: $showTimeProgress)
+                    .help("按额度周期的自然时间计算，包含睡眠和休息时间。")
                     .disabled(icon == MenuBarIcon.none.rawValue && showTimeProgress && textCount == 1)
                 Toggle("用量偏移", isOn: $showDeviation)
                     .disabled(icon == MenuBarIcon.none.rawValue && showDeviation && textCount == 1)
+                    .help("实际用量减去参考进度，pp 表示百分点。")
             }
             .toggleStyle(.switch).controlSize(.small)
-            Text("文本依次显示已用百分比、时间进度、用量偏移。偏移单位 pp 为百分点；正值表示用量超前，负值表示用量滞后。关闭的项目会跳过。")
-                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            Text("至少保留图标或一项文本。设置自动保存并即时生效。")
-                .font(.caption).foregroundStyle(.secondary)
         }
         .padding(20).frame(width: 380)
     }

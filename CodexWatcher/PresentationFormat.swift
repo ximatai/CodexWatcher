@@ -57,6 +57,17 @@ struct PresentationFormat {
         return formatter.string(from: date)
     }
 
+    func compactDate(_ date: Date, relativeTo reference: Date = .now) -> String {
+        var calendar = Calendar.autoupdatingCurrent
+        calendar.timeZone = timeZone
+        let formatter = DateFormatter()
+        formatter.locale = locale
+        formatter.timeZone = timeZone
+        let sameYear = calendar.component(.year, from: date) == calendar.component(.year, from: reference)
+        formatter.setLocalizedDateFormatFromTemplate(sameYear ? "MMMdjm" : "yMMMdjm")
+        return formatter.string(from: date)
+    }
+
     func number(_ value: Double, decimals: Int = 0, signed: Bool = false) -> String {
         let formatter = NumberFormatter()
         formatter.locale = locale
@@ -76,8 +87,8 @@ struct PresentationFormat {
         return formatter.string(from: NSNumber(value: value / 100)) ?? "—"
     }
 
-    func deviation(_ value: Double) -> String {
-        "\(number(value, decimals: 1, signed: true)) \(text("percentage points"))"
+    func deviation(_ value: Double, signed: Bool = true) -> String {
+        "\(number(value, decimals: 1, signed: signed)) \(text("percentage points"))"
     }
 
     func duration(_ seconds: TimeInterval) -> String {

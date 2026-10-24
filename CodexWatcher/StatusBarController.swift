@@ -12,6 +12,7 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
     private let popover = NSPopover()
     private var settingsWindow: NSWindow?
     private var expirySettingsWindow: NSWindow?
+    private var helloSettingsWindow: NSWindow?
     private var defaultsObserver: NSObjectProtocol?
     private var stopped = false
     private var clearFocusAfterMouseOpen = false
@@ -90,7 +91,7 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
         if let quota {
             let format = PresentationFormat()
             let deviation = isStale ? nil : quota.deviation(at: monitor.displayDate)
-            item.button?.setAccessibilityValue("已用 \(format.percent(quota.usedPercent))；时间进度 \(quota.standardPercent(at: monitor.displayDate).map { format.percent($0) } ?? "未知")；偏移 \(deviation.map { format.deviation($0) } ?? "待更新")")
+            item.button?.setAccessibilityValue("已用 \(format.percent(quota.usedPercent))；参考进度 \(quota.standardPercent(at: monitor.displayDate).map { format.percent($0) } ?? "未知")；偏移 \(deviation.map { format.deviation($0) } ?? "待更新")")
         } else {
             item.button?.setAccessibilityValue("暂无额度数据")
         }
@@ -112,6 +113,11 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
 
     private func showPopover(clearInitialFocus: Bool) {
         guard let button = item.button else { return }
+        let availableHeight = max(280, (button.window?.screen?.visibleFrame.height ?? 760) - 48)
+        if let hosting = popover.contentViewController as? NSHostingController<ContentView> {
+            hosting.rootView = ContentView(monitor: monitor, openDashboard: openDashboard, maximumHeight: availableHeight)
+        }
+        popover.contentSize = NSSize(width: 390, height: min(monitor.account == nil ? 440 : 660, availableHeight))
         clearFocusAfterMouseOpen = clearInitialFocus
         NSApp.activate(ignoringOtherApps: true)
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
@@ -261,7 +267,9 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
             var gear: NSPopUpButton?
             guard await waitFor({
                 guard self.popover.isShown, self.localEventMonitor != nil, !self.monitor.isBusy,
-                      let view = self.popover.contentViewController?.view else { return false }
+                      NSApp.isActive, let view = self.popover.contentViewController?.view,
+                      view.window?.isKeyWindow == true else { return false }
+                view.layoutSubtreeIfNeeded()
                 // The one-window fixture has exactly one native menu button: Settings.
                 // SwiftUI's accessibility tree may not exist on a CI desktop without an AX client.
                 let buttons = menuButtons(in: view)
@@ -343,6 +351,7 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
         }
         _ = add("状态栏显示…", #selector(showSettings))
         _ = add("重置卡临期处理…", #selector(showExpirySettings))
+        _ = add("满额自动 hello…", #selector(showHelloSettings))
         let hideEmail = add("隐藏邮箱", #selector(toggleEmailPrivacy))
         hideEmail.state = UserDefaults.standard.bool(forKey: "privacyMode") ? .on : .off
         hideEmail.image = NSImage(systemSymbolName: "eye.slash", accessibilityDescription: nil)
@@ -373,6 +382,9 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
             menu.addItem(.separator())
             add("退出账号", #selector(logout)).isEnabled = !monitor.isBusy && monitor.loginID == nil
         }
+        menu.addItem(.separator())
+        _ = add("使用帮助", #selector(showHelp))
+        _ = add("关于 Codex Watcher", #selector(showAbout))
         menu.addItem(.separator())
         _ = add("退出应用", #selector(quit))
         return menu
@@ -410,6 +422,22 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
         expirySettingsWindow?.makeKeyAndOrderFront(nil)
     }
 
+    @objc private func showHelloSettings() {
+        if helloSettingsWindow == nil {
+            let hosting = NSHostingController(rootView: AutomaticHelloSettingsView(monitor: monitor,
+                onClose: { [weak self] in self?.helloSettingsWindow?.close() }))
+            hosting.sizingOptions = [.minSize, .maxSize]
+            let window = NSWindow(contentViewController: hosting)
+            window.title = "满额自动 hello"
+            window.styleMask = [.titled, .closable]
+            window.isReleasedWhenClosed = false
+            window.center()
+            helloSettingsWindow = window
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        helloSettingsWindow?.makeKeyAndOrderFront(nil)
+    }
+
     @objc private func showDashboard() { openDashboard() }
     @objc private func toggleLoginItem() {
         let controller = LoginItemController.shared
@@ -420,6 +448,13 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
     @objc private func chooseExecutable() { Task { await monitor.chooseExecutable() } }
     @objc private func logout() { Task { await monitor.logout() } }
     @objc private func quit() { NSApp.terminate(nil) }
+    @objc private func showHelp() {
+        NSWorkspace.shared.open(URL(string: "https://github.com/ximatai/CodexWatcher/blob/main/docs/USAGE.md")!)
+    }
+    @objc private func showAbout() {
+        NSApp.activate(ignoringOtherApps: true)
+        NSApp.orderFrontStandardAboutPanel(nil)
+    }
     @objc private func toggleEmailPrivacy() {
         let defaults = UserDefaults.standard
         defaults.set(!defaults.bool(forKey: "privacyMode"), forKey: "privacyMode")

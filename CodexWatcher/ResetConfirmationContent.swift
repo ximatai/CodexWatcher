@@ -64,7 +64,7 @@ struct ResetConfirmationContent: View {
                 Spacer(minLength: 0)
                 Button("取消", action: cancel).keyboardShortcut(.cancelAction)
                 Button(isRetry ? "重试重置" : "消耗 1 张并重置", role: .destructive, action: confirm)
-                    .buttonStyle(.borderedProminent).tint(.red)
+                    .buttonStyle(.borderedProminent).tint(palette.danger)
                     .disabled(!canConfirm)
             }
             .controlSize(.regular)

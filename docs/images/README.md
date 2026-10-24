@@ -8,10 +8,17 @@
 | --- | --- |
 | [dashboard-light.png](dashboard-light.png) | 亮色面板 |
 | [dashboard-dark.png](dashboard-dark.png) | 暗色面板 |
+| [dashboard-pro-short-only.png](dashboard-pro-short-only.png) | Pro 仅返回短周期额度，不显示 7 天窗口 |
 | [menu-bar-settings.png](menu-bar-settings.png) | 状态栏设置与数值预览 |
 | [reset-confirmation.png](reset-confirmation.png) | 重置确认页 |
 | [credit-expiry-reminder.png](credit-expiry-reminder.png) | 临期处理的提醒模式 |
 | [credit-expiry-automatic.png](credit-expiry-automatic.png) | 临期处理的自动模式 |
+| [automatic-hello-off.png](automatic-hello-off.png) | 满额自动 hello 默认关闭 |
+| [automatic-hello-on.png](automatic-hello-on.png) | 满额自动 hello 开启后绑定账号和窗口；不实际发起问候 |
+| [dashboard-offline.png](dashboard-offline.png) | 读取失败，保留上次用量及只读恢复入口 |
+| [dashboard-compact.png](dashboard-compact.png) | 紧凑高度，内容滚动且保留头部与底栏 |
+| [dashboard-expanded.png](dashboard-expanded.png) | 调整独立窗口后的宽布局 |
+| [welcome.png](welcome.png) | 未登录界面 |
 
 ## 重新生成
 
