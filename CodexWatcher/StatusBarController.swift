@@ -13,6 +13,7 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
     private var settingsWindow: NSWindow?
     private var expirySettingsWindow: NSWindow?
     private var helloSettingsWindow: NSWindow?
+    private var resetWindow: NSWindow?
     private var defaultsObserver: NSObjectProtocol?
     private var stopped = false
     private var clearFocusAfterMouseOpen = false
@@ -36,7 +37,7 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
         // Own dismissal completely: native transient dismissal can race menu tracking.
         popover.behavior = .applicationDefined
         popover.delegate = self
-        let hosting = NSHostingController(rootView: ContentView(monitor: monitor, openDashboard: openDashboard))
+        let hosting = NSHostingController(rootView: popoverContent())
         hosting.sizingOptions = [.preferredContentSize]
         popover.contentViewController = hosting
         popover.contentSize = NSSize(width: 390, height: monitor.account == nil ? 440 : 660)
@@ -111,11 +112,24 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
         }
     }
 
+    // Popovers can disappear independently of SwiftUI's sheet lifecycle. Route every
+    // modal action to an owned window so no invisible attached sheet can block clicks.
+    private func popoverContent(maximumHeight: CGFloat = 660) -> ContentView {
+        ContentView(monitor: monitor, openDashboard: openDashboard,
+            presentSettings: { [weak self] page in
+                switch page {
+                case .menuBar: self?.showSettings()
+                case .creditExpiry: self?.showExpirySettings()
+                case .automaticHello: self?.showHelloSettings()
+                }
+            }, presentReset: { [weak self] in self?.showReset($0) }, maximumHeight: maximumHeight)
+    }
+
     private func showPopover(clearInitialFocus: Bool) {
         guard let button = item.button else { return }
         let availableHeight = max(280, (button.window?.screen?.visibleFrame.height ?? 760) - 48)
         if let hosting = popover.contentViewController as? NSHostingController<ContentView> {
-            hosting.rootView = ContentView(monitor: monitor, openDashboard: openDashboard, maximumHeight: availableHeight)
+            hosting.rootView = popoverContent(maximumHeight: availableHeight)
         }
         popover.contentSize = NSSize(width: 390, height: min(monitor.account == nil ? 440 : 660, availableHeight))
         clearFocusAfterMouseOpen = clearInitialFocus
@@ -337,6 +351,48 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
             guard outsideClickMonitor == nil, localEventMonitor == nil,
                   dismissalObservers.isEmpty, activationObserver == nil else { return fail(#line) }
         }
+        // Exercise SwiftUI menu actions as well as menu tracking. A hidden attached
+        // sheet may allow performClick while blocking real mouse delivery entirely.
+        let pages: [(String, () -> NSWindow?)] = [
+            ("状态栏显示…", { self.settingsWindow }),
+            ("重置卡临期处理…", { self.expirySettingsWindow }),
+            ("满额自动 hello…", { self.helloSettingsWindow })
+        ]
+        for (title, destination) in pages {
+            showPopover(clearInitialFocus: true)
+            guard await waitFor({
+                guard let view = self.popover.contentViewController?.view else { return false }
+                view.layoutSubtreeIfNeeded()
+                return menuButtons(in: view).count == 1
+            }), let view = popover.contentViewController?.view,
+                let gear = menuButtons(in: view).first, let menu = gear.menu,
+                let index = menu.items.firstIndex(where: { $0.title == title }) else { return fail(#line) }
+            menu.performActionForItem(at: index)
+            guard await waitFor({ destination()?.isVisible == true && !self.popover.isShown }),
+                  view.window?.attachedSheet == nil else { return fail(#line) }
+            // Reopening while the settings window exists must never restore a sheet.
+            showPopover(clearInitialFocus: true)
+            guard await waitFor({ self.popover.isShown }),
+                  let window = view.window, window.attachedSheet == nil,
+                  NSApp.modalWindow == nil else { return fail(#line) }
+            view.layoutSubtreeIfNeeded()
+            guard let reopenedGear = menuButtons(in: view).first else { return fail(#line) }
+            let point = reopenedGear.convert(NSPoint(x: reopenedGear.bounds.midX, y: reopenedGear.bounds.midY), to: view.superview)
+            guard let hit = view.hitTest(point), hit === reopenedGear || hit.isDescendant(of: reopenedGear) else {
+                FileHandle.standardError.write(Data("Gear hit: frame=\(reopenedGear.frame), host=\(view.frame), point=\(point), hit=\(String(describing: view.hitTest(point)))\n".utf8))
+                return fail(#line)
+            }
+            closePopover()
+            destination()?.close()
+        }
+        // Open and cancel a fake reset confirmation; never confirm or send a write.
+        guard let credit = monitor.sortedCredits.first,
+              let confirmation = monitor.makeResetConfirmation(for: credit) else { return fail(#line) }
+        showPopover(clearInitialFocus: true)
+        showReset(confirmation)
+        guard await waitFor({ self.resetWindow?.isVisible == true && !self.popover.isShown }),
+              popover.contentViewController?.view.window?.attachedSheet == nil else { return fail(#line) }
+        resetWindow?.close()
         return true
     }
 
@@ -391,6 +447,7 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
     }
 
     @objc private func showSettings() {
+        closePopover()
         if settingsWindow == nil {
             let hosting = NSHostingController(rootView: MenuBarSettingsView(monitor: monitor,
                 onClose: { [weak self] in self?.settingsWindow?.close() }))
@@ -407,6 +464,7 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
     }
 
     @objc private func showExpirySettings() {
+        closePopover()
         if expirySettingsWindow == nil {
             let hosting = NSHostingController(rootView: CreditExpirySettingsView(monitor: monitor,
                 onClose: { [weak self] in self?.expirySettingsWindow?.close() }))
@@ -423,6 +481,7 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
     }
 
     @objc private func showHelloSettings() {
+        closePopover()
         if helloSettingsWindow == nil {
             let hosting = NSHostingController(rootView: AutomaticHelloSettingsView(monitor: monitor,
                 onClose: { [weak self] in self?.helloSettingsWindow?.close() }))
@@ -436,6 +495,28 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
         }
         NSApp.activate(ignoringOtherApps: true)
         helloSettingsWindow?.makeKeyAndOrderFront(nil)
+    }
+
+    private func showReset(_ confirmation: ResetConfirmation) {
+        closePopover()
+        resetWindow?.close()
+        let hosting = NSHostingController(rootView: ResetConfirmationView(monitor: monitor,
+            confirmation: confirmation,
+            cancel: { [weak self] in self?.resetWindow?.close() },
+            confirm: { [weak self] in
+                guard let self else { return }
+                self.resetWindow?.close()
+                Task { await self.monitor.redeem(confirmation) }
+            }))
+        hosting.sizingOptions = [.minSize, .maxSize]
+        let window = NSWindow(contentViewController: hosting)
+        window.title = confirmation.retry == nil ? "使用重置卡" : "重试重置"
+        window.styleMask = [.titled, .closable]
+        window.isReleasedWhenClosed = false
+        window.center()
+        resetWindow = window
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
     }
 
     @objc private func showDashboard() { openDashboard() }
