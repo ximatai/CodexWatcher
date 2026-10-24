@@ -6,6 +6,7 @@ import Observation
 @MainActor
 final class StatusBarController: NSObject, NSPopoverDelegate {
     private let monitor: UsageMonitor
+    private let updates: ReleaseUpdateChecker?
     private let openDashboard: () -> Void
     private let observesExternalEvents: Bool
     private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -23,8 +24,9 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
     private var activationObserver: NSObjectProtocol?
     private var dismissalState = PopoverDismissalState()
 
-    init(monitor: UsageMonitor, observesExternalEvents: Bool = true, openDashboard: @escaping () -> Void) {
+    init(monitor: UsageMonitor, updates: ReleaseUpdateChecker? = nil, observesExternalEvents: Bool = true, openDashboard: @escaping () -> Void) {
         self.monitor = monitor
+        self.updates = updates
         self.openDashboard = openDashboard
         self.observesExternalEvents = observesExternalEvents
         super.init()
@@ -115,7 +117,7 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
     // Popovers can disappear independently of SwiftUI's sheet lifecycle. Route every
     // modal action to an owned window so no invisible attached sheet can block clicks.
     private func popoverContent(maximumHeight: CGFloat = 660) -> ContentView {
-        ContentView(monitor: monitor, openDashboard: openDashboard,
+        ContentView(monitor: monitor, updates: updates, dismissForUpdate: { [weak self] in self?.closePopover() }, openDashboard: openDashboard,
             presentSettings: { [weak self] page in
                 switch page {
                 case .menuBar: self?.showSettings()
@@ -260,6 +262,9 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
             FileHandle.standardError.write(Data("Popover smoke failed at line \(line)\n".utf8))
             return false
         }
+        guard updates?.releaseURL?.absoluteString == "https://github.com/ximatai/CodexWatcher/releases/tag/v999.0.0",
+              settingsMenu().items.contains(where: { $0.title == "新版本 999.0.0…" }),
+              settingsMenu().items.contains(where: { $0.title == "检查更新…" }) else { return fail(#line) }
         let animated = popover.animates
         popover.animates = false
         defer { closePopover(); popover.animates = animated }
@@ -439,6 +444,10 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
             add("退出账号", #selector(logout)).isEnabled = !monitor.isBusy && monitor.loginID == nil
         }
         menu.addItem(.separator())
+        if let updates {
+            if updates.availableVersion != nil { _ = add(updates.menuTitle, #selector(openUpdate)) }
+            add(updates.isChecking ? "正在检查更新…" : "检查更新…", #selector(checkUpdates)).isEnabled = !updates.isChecking
+        }
         _ = add("使用帮助", #selector(showHelp))
         _ = add("关于 Codex Watcher", #selector(showAbout))
         menu.addItem(.separator())
@@ -529,6 +538,11 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
     @objc private func chooseExecutable() { Task { await monitor.chooseExecutable() } }
     @objc private func logout() { Task { await monitor.logout() } }
     @objc private func quit() { NSApp.terminate(nil) }
+    @objc private func openUpdate() { closePopover(); updates?.openAvailableRelease() }
+    @objc private func checkUpdates() {
+        closePopover()
+        Task { await updates?.checkInteractively() }
+    }
     @objc private func showHelp() {
         NSWorkspace.shared.open(URL(string: "https://github.com/ximatai/CodexWatcher/blob/main/docs/USAGE.md")!)
     }

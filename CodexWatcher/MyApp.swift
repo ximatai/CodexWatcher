@@ -26,6 +26,11 @@ final class WatcherAppDelegate: NSObject, NSApplicationDelegate {
         return UsageMonitor(client: AppServerClient(executablePath: root.appendingPathComponent("fake-codex").path,
             runtimeDirectory: root.appendingPathComponent("Runtime"), requestTimeout: .seconds(5)), defaults: defaults)
     }()
+    private let updates: ReleaseUpdateChecker = {
+        guard smokeRoot != nil else { return ReleaseUpdateChecker() }
+        return ReleaseUpdateChecker(version: "0.3.1", defaults: UserDefaults(suiteName: "WatcherUpdateSmoke-\(UUID())")!,
+            fetch: { GitHubRelease(tag_name: "v999.0.0", draft: false, prerelease: false) })
+    }()
     private var clockTimer: Timer?
     private var statusController: StatusBarController?
     private var dashboard: NSWindow?
@@ -44,7 +49,10 @@ final class WatcherAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        statusController = StatusBarController(monitor: monitor, observesExternalEvents: Self.smokeRoot == nil) { [weak self] in self?.showDashboard() }
+        statusController = StatusBarController(monitor: monitor, updates: updates, observesExternalEvents: Self.smokeRoot == nil) { [weak self] in self?.showDashboard() }
+        if Self.smokeRoot == nil {
+            Task { await updates.check() }
+        }
         let event = NSAppleEventManager.shared().currentAppleEvent
         let launchedAtLogin = event?.eventID == kAEOpenApplication
             && event?.paramDescriptor(forKeyword: keyAEPropData)?.enumCodeValue == keyAELaunchedAsLogInItem
@@ -79,6 +87,10 @@ final class WatcherAppDelegate: NSObject, NSApplicationDelegate {
                                      wakeNotifications: NotificationCenter) async {
         while monitor.isBusy {
             try? await Task.sleep(for: .milliseconds(20))
+        }
+        let updateResult = await updates.check(force: true)
+        guard updateResult == .available, updates.availableVersion == ReleaseVersion("999.0.0") else {
+            finishReleaseSmokeTest(); return
         }
         guard monitor.account?.email == "smoke@example.invalid", monitor.snapshot != nil,
               monitor.errorMessage == nil, statusController?.isReadyForSmokeTest == true,
@@ -130,7 +142,10 @@ final class WatcherAppDelegate: NSObject, NSApplicationDelegate {
         NSApp.terminate(nil)
     }
 
-    @objc private func updateClock() { monitor.updateClock() }
+    @objc private func updateClock() {
+        monitor.updateClock()
+        if Self.smokeRoot == nil { Task { await updates.check() } }
+    }
 
     func applicationDidBecomeActive(_ notification: Notification) {
         if Self.smokeRoot == nil { LoginItemController.shared.refresh() }
@@ -144,7 +159,7 @@ final class WatcherAppDelegate: NSObject, NSApplicationDelegate {
     private func showDashboard() {
         statusController?.closePopover()
         if dashboard == nil {
-            let hosting = NSHostingController(rootView: ContentView(monitor: monitor,
+            let hosting = NSHostingController(rootView: ContentView(monitor: monitor, updates: updates,
                 handlesExpiryReminders: true, openDashboard: { [weak self] in self?.showDashboard() }, flexibleSize: true))
             hosting.sizingOptions = [.minSize]
             let window = NSWindow(contentViewController: hosting)

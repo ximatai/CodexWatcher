@@ -7,6 +7,8 @@ enum DashboardSettingsPage {
 
 struct ContentView: View {
     @Bindable var monitor: UsageMonitor
+    var updates: ReleaseUpdateChecker? = nil
+    var dismissForUpdate: () -> Void = {}
     var handlesExpiryReminders = false
     var openDashboard: () -> Void = {}
     var presentSettings: ((DashboardSettingsPage) -> Void)?
@@ -16,7 +18,7 @@ struct ContentView: View {
     @AppStorage("appearance") private var appearance = AppAppearance.system.rawValue
 
     var body: some View {
-        DashboardContent(monitor: monitor, appearance: $appearance, handlesExpiryReminders: handlesExpiryReminders, openDashboard: openDashboard, presentSettings: presentSettings, presentReset: presentReset, flexibleSize: flexibleSize, maximumHeight: maximumHeight)
+        DashboardContent(monitor: monitor, updates: updates, dismissForUpdate: dismissForUpdate, appearance: $appearance, handlesExpiryReminders: handlesExpiryReminders, openDashboard: openDashboard, presentSettings: presentSettings, presentReset: presentReset, flexibleSize: flexibleSize, maximumHeight: maximumHeight)
             .onAppear { applyAppearance() }
             .onChange(of: appearance) { _, _ in applyAppearance() }
     }
@@ -31,6 +33,8 @@ private struct DashboardContent: View {
     @Environment(\.timeZone) private var timeZone
     @Environment(\.colorScheme) private var colorScheme
     @Bindable var monitor: UsageMonitor
+    var updates: ReleaseUpdateChecker?
+    let dismissForUpdate: () -> Void
     @Binding var appearance: String
     @AppStorage("privacyMode") private var privacyMode = false
     let handlesExpiryReminders: Bool
@@ -500,6 +504,16 @@ private struct DashboardContent: View {
                             .disabled(monitor.isBusy || monitor.loginID != nil)
                     }
                     Divider()
+                    if let updates {
+                        if updates.availableVersion != nil {
+                            Button(updates.menuTitle) { dismissForUpdate(); updates.openAvailableRelease() }
+                        }
+                        Button(updates.isChecking ? "正在检查更新…" : "检查更新…") {
+                            dismissForUpdate()
+                            Task { await updates.checkInteractively() }
+                        }
+                            .disabled(updates.isChecking)
+                    }
                     Button("使用帮助") { NSWorkspace.shared.open(URL(string: "https://github.com/ximatai/CodexWatcher/blob/main/docs/USAGE.md")!) }
                     Button("关于 Codex Watcher") { NSApp.orderFrontStandardAboutPanel(nil) }
                 } label: {
