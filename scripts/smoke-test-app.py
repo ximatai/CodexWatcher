@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Launch the packaged app with a local read-only fixture; never use real Codex."""
+"""Check the packaged app with a read-only fixture; optional second argument exports layout previews."""
 import json
 import os
+import shutil
 from pathlib import Path
 import subprocess
 import sys
@@ -49,4 +50,9 @@ done
     allowed = {'initialize', 'initialized', 'account/read', 'account/rateLimits/read'}
     if set(methods) != allowed:
         raise SystemExit('Smoke fixture received unexpected requests')
+    if len(sys.argv) > 2:
+        previews = Path(sys.argv[2]).resolve()
+        previews.mkdir(parents=True, exist_ok=True)
+        for preview in root.glob('popover-cards-*.png'):
+            shutil.copy2(preview, previews / preview.name)
 print('Packaged app startup, popover/menu lifecycle, wake, fake reminder and confirmation navigation passed; no writes.')
