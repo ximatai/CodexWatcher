@@ -42,7 +42,7 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
         let hosting = NSHostingController(rootView: popoverContent())
         hosting.sizingOptions = [.preferredContentSize]
         popover.contentViewController = hosting
-        popover.contentSize = NSSize(width: 390, height: monitor.account == nil ? 440 : 660)
+        popover.contentSize = NSSize(width: 390, height: 440)
         defaultsObserver = NotificationCenter.default.addObserver(
             forName: UserDefaults.didChangeNotification, object: nil, queue: .main
         ) { [weak self] _ in
@@ -133,7 +133,6 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
         if let hosting = popover.contentViewController as? NSHostingController<ContentView> {
             hosting.rootView = popoverContent(maximumHeight: availableHeight)
         }
-        popover.contentSize = NSSize(width: 390, height: min(monitor.account == nil ? 440 : 660, availableHeight))
         clearFocusAfterMouseOpen = clearInitialFocus
         NSApp.activate(ignoringOtherApps: true)
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
@@ -252,6 +251,70 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
         if let activationObserver { NSWorkspace.shared.notificationCenter.removeObserver(activationObserver) }
         activationObserver = nil
         dismissalState.reset()
+    }
+
+    /// Verify real preferred-content-size propagation while the popover stays open.
+    func verifyPopoverSizingForSmokeTest(root: URL) async -> Bool {
+        guard CommandLine.arguments.contains("--release-smoke-test"),
+              ProcessInfo.processInfo.environment["WATCHER_SMOKE_ROOT"] == root.path else { return false }
+        let usage = root.appendingPathComponent("usage.json")
+        guard let original = try? Data(contentsOf: usage),
+              let snapshot = try? JSONSerialization.jsonObject(with: original) as? [String: Any],
+              let summary = snapshot["rateLimitResetCredits"] as? [String: Any],
+              let cards = summary["credits"] as? [[String: Any]], let card = cards.first else { return false }
+        let animated = popover.animates
+        popover.animates = false
+        defer { try? original.write(to: usage); closePopover(); popover.animates = animated }
+        var heights: [Int: CGFloat] = [:]
+        for count in [0, 1, 3, 20, 1] {
+            var updated = snapshot
+            var credits = summary
+            credits["availableCount"] = count
+            credits["credits"] = (0..<count).map { index in
+                var copy = card
+                copy["id"] = "sizing-card-\(index)"
+                return copy
+            }
+            updated["rateLimitResetCredits"] = credits
+            guard let data = try? JSONSerialization.data(withJSONObject: updated),
+                  (try? data.write(to: usage)) != nil else { return false }
+            await monitor.refresh()
+            if !popover.isShown { showPopover(clearInitialFocus: true) }
+            var last: CGFloat = -1
+            var stable = 0
+            for _ in 0..<60 {
+                try? await Task.sleep(for: .milliseconds(30))
+                popover.contentViewController?.view.layoutSubtreeIfNeeded()
+                let height = popover.contentSize.height
+                stable = abs(height - last) < 0.5 ? stable + 1 : 0
+                last = height
+                if stable >= 8 { break }
+            }
+            let cap = max(280, (item.button?.window?.screen?.visibleFrame.height ?? 760) - 48)
+            guard stable >= 8, last >= 280, last <= cap + 1 else { return false }
+            FileHandle.standardError.write(Data("Adaptive popover: cards=\(count), height=\(last), cap=\(cap)\n".utf8))
+            if let previous = heights[count], abs(previous - last) > 1 { return false }
+            heights[count] = last
+            if let view = popover.contentViewController?.view,
+               let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
+                view.cacheDisplay(in: view.bounds, to: bitmap)
+                if let png = bitmap.representation(using: .png, properties: [:]) {
+                    try? png.write(to: root.appendingPathComponent("popover-cards-\(count).png"))
+                }
+            }
+        }
+        guard let empty = heights[0], let single = heights[1], let three = heights[3], let many = heights[20],
+              empty <= single, single <= three, three <= many else { return false }
+        let cap = max(280, (item.button?.window?.screen?.visibleFrame.height ?? 760) - 48)
+        if empty < cap - 1 && empty >= single { return false }
+        if single < cap - 1 && single >= three { return false }
+        closePopover()
+        showPopover(clearInitialFocus: true)
+        try? await Task.sleep(for: .milliseconds(300))
+        guard abs(popover.contentSize.height - single) < 1 else { return false }
+        try? original.write(to: usage)
+        await monitor.refresh()
+        return true
     }
 
     /// Runs only with the isolated CLI fixture. Opens the actual native gear control;

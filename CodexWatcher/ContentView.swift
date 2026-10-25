@@ -43,6 +43,7 @@ private struct DashboardContent: View {
     let presentReset: ((ResetConfirmation) -> Void)?
     let flexibleSize: Bool
     let maximumHeight: CGFloat
+    @State private var contentHeights: [DashboardRegion: CGFloat] = [:]
     @State private var resetConfirmation: ResetConfirmation?
     @State private var showingMenuBarSettings = false
     @State private var showingExpirySettings = false
@@ -53,6 +54,13 @@ private struct DashboardContent: View {
     private var format: PresentationFormat { PresentationFormat(locale: locale, timeZone: timeZone) }
     private var palette: AppPalette { AppPalette(dark: colorScheme == .dark) }
 
+    private var fittedHeight: CGFloat {
+        let header = contentHeights[.header] ?? 100
+        let body = contentHeights[.body] ?? 400
+        let footer = contentHeights[.footer] ?? 49
+        return min(maximumHeight, max(280, header + body + footer))
+    }
+
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { context in
             VStack(spacing: 0) {
@@ -62,6 +70,8 @@ private struct DashboardContent: View {
                     separator
                 }
                 .padding(.horizontal, 22).padding(.top, 20).padding(.bottom, 14)
+                .fixedSize(horizontal: false, vertical: true)
+                .dashboardHeight(.header)
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
                         if monitor.account?.type == "chatgpt" {
@@ -77,15 +87,22 @@ private struct DashboardContent: View {
                         }
                     }
                     .padding(.horizontal, 22).padding(.bottom, 16)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .dashboardHeight(.body)
                 }
                 footer
+                    .fixedSize(horizontal: false, vertical: true)
+                    .dashboardHeight(.footer)
             }
             .frame(minWidth: 390, maxWidth: flexibleSize ? .infinity : 390)
-            .frame(height: flexibleSize ? nil : min(monitor.account == nil ? 440 : 660, maximumHeight))
+            .frame(height: flexibleSize ? nil : fittedHeight)
             .frame(minHeight: flexibleSize ? 360 : nil)
             .background(palette.background)
             .foregroundStyle(.primary)
             .tint(palette.accent)
+        }
+        .onPreferenceChange(DashboardHeightPreference.self) { heights in
+            if !flexibleSize { contentHeights = heights }
         }
         .sheet(isPresented: $showingMenuBarSettings, onDismiss: finishExpiryReviewDismissal) {
             MenuBarSettingsView(monitor: monitor)
@@ -591,5 +608,24 @@ private struct ResetTicketShape: Shape {
             path.addQuadCurve(to: CGPoint(x: corner, y: 0), control: .zero)
             path.closeSubpath()
         }
+    }
+}
+
+// Measure intrinsic content inside the scroll view, never the viewport itself.
+// This lets card counts, quota summaries and feedback all contribute to height.
+private enum DashboardRegion: Hashable { case header, body, footer }
+
+private struct DashboardHeightPreference: PreferenceKey {
+    static var defaultValue: [DashboardRegion: CGFloat] = [:]
+    static func reduce(value: inout [DashboardRegion: CGFloat], nextValue: () -> [DashboardRegion: CGFloat]) {
+        value.merge(nextValue(), uniquingKeysWith: { _, new in new })
+    }
+}
+
+private extension View {
+    func dashboardHeight(_ region: DashboardRegion) -> some View {
+        background(GeometryReader { geometry in
+            Color.clear.preference(key: DashboardHeightPreference.self, value: [region: geometry.size.height])
+        })
     }
 }

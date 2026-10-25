@@ -103,7 +103,8 @@ final class WatcherAppDelegate: NSObject, NSApplicationDelegate {
               notifications.permissionRequests == 0,
               notifications.delivered.isEmpty else { finishReleaseSmokeTest(); return }
         for appearance in [AppAppearance.light, .dark, .system] { appearance.apply(to: NSApp) }
-        guard await statusController?.verifyPopoverForSmokeTest() == true else {
+        guard await statusController?.verifyPopoverSizingForSmokeTest(root: root) == true,
+              await statusController?.verifyPopoverForSmokeTest() == true else {
             finishReleaseSmokeTest(); return
         }
         // Exercise the real runtime callbacks and wake observer using only local fakes.
