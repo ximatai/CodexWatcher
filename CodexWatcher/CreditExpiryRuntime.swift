@@ -25,7 +25,7 @@ final class CreditExpiryRuntime {
             await notifications?.requestPermission() ?? false
         }
         monitor.deliverExpiryReminder = { [weak notifications] reminder in
-            guard let notifications else { throw WatcherError.message("通知不可用。") }
+            guard let notifications else { throw WatcherError.message(L10n.text("通知不可用。")) }
             try await notifications.deliver(reminder)
         }
         monitor.clearExpiryNotifications = { [weak notifications] in notifications?.clear() }

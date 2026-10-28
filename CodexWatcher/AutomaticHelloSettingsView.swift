@@ -59,7 +59,7 @@ struct AutomaticHelloSettingsView: View {
                 }
             } else if let record = monitor.automaticHelloRecord, let attemptedAt = record.attemptedAt {
                 HStack {
-                    Label(record.outcome == "completed" ? "hello 已完成" : "本次不再补发",
+                    Label(record.outcome == "completed" ? String(localized: "hello 已完成") : String(localized: "本次不再补发"),
                           systemImage: record.outcome == "completed" ? "checkmark.circle" : "exclamationmark.circle")
                     Spacer()
                     Text(format.date(Date(timeIntervalSince1970: attemptedAt),

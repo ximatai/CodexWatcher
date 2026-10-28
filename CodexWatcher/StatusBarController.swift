@@ -88,15 +88,15 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
         let title = config.title(quota: quota, at: monitor.displayDate, isStale: isStale)
         item.button?.image = MenuBarLabelRenderer.image(title: title, symbolName: config.effectiveSymbol)
         item.button?.toolTip = isStale
-            ? "Codex Watcher · 用量待更新，偏移暂不可用。左键查看用量，右键打开设置"
-            : "Codex Watcher · 左键查看用量，右键打开设置"
+            ? L10n.text("Codex Watcher · 用量待更新，偏移暂不可用。左键查看用量，右键打开设置")
+            : L10n.text("Codex Watcher · 左键查看用量，右键打开设置")
         item.button?.setAccessibilityLabel("Codex Watcher · \(title)")
         if let quota {
             let format = PresentationFormat()
             let deviation = isStale ? nil : quota.deviation(at: monitor.displayDate)
-            item.button?.setAccessibilityValue("已用 \(format.percent(quota.usedPercent))；参考进度 \(quota.standardPercent(at: monitor.displayDate).map { format.percent($0) } ?? "未知")；偏移 \(deviation.map { format.deviation($0) } ?? "待更新")")
+            item.button?.setAccessibilityValue(L10n.text("已用 \(format.percent(quota.usedPercent))；参考进度 \(quota.standardPercent(at: monitor.displayDate).map { format.percent($0) } ?? L10n.text("未知"))；偏移 \(deviation.map { format.deviation($0) } ?? L10n.text("待更新"))"))
         } else {
-            item.button?.setAccessibilityValue("暂无额度数据")
+            item.button?.setAccessibilityValue(L10n.text("暂无额度数据"))
         }
     }
 
@@ -420,8 +420,8 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
             return false
         }
         guard updates?.releaseURL?.absoluteString == "https://github.com/ximatai/CodexWatcher/releases/tag/v999.0.0",
-              settingsMenu().items.contains(where: { $0.title == "新版本 999.0.0…" }),
-              settingsMenu().items.contains(where: { $0.title == "检查更新…" }) else { return fail(#line) }
+              settingsMenu().items.contains(where: { $0.title == L10n.text("新版本 \("999.0.0")…") }),
+              settingsMenu().items.contains(where: { $0.title == L10n.text("检查更新…") }) else { return fail(#line) }
         let animated = popover.animates
         popover.animates = false
         defer { closePopover(); popover.animates = animated }
@@ -466,7 +466,7 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
                 object: nil, queue: .main) { [weak self] notification in
                 MainActor.assumeIsolated {
                     guard let menu = notification.object as? NSMenu, !probe.sawMenu,
-                          menu.items.contains(where: { $0.title == "状态栏显示…" }) else { return }
+                          menu.items.contains(where: { $0.title == L10n.text("状态栏显示…") }) else { return }
                     probe.sawMenu = true
                     if cycle == 1 { self?.handleOtherApplicationActivation() }
                     if cycle == 2, let window = self?.popover.contentViewController?.view.window {
@@ -516,9 +516,9 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
         // Exercise SwiftUI menu actions as well as menu tracking. A hidden attached
         // sheet may allow performClick while blocking real mouse delivery entirely.
         let pages: [(String, () -> NSWindow?)] = [
-            ("状态栏显示…", { self.settingsWindow }),
-            ("重置卡临期处理…", { self.expirySettingsWindow }),
-            ("满额自动 hello…", { self.helloSettingsWindow })
+            (L10n.text("状态栏显示…"), { self.settingsWindow }),
+            (L10n.text("重置卡临期处理…"), { self.expirySettingsWindow }),
+            (L10n.text("满额自动 hello…"), { self.helloSettingsWindow })
         ]
         for (title, destination) in pages {
             showPopover(clearInitialFocus: true)
@@ -567,13 +567,13 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
             menu.addItem(entry)
             return entry
         }
-        _ = add("状态栏显示…", #selector(showSettings))
-        _ = add("重置卡临期处理…", #selector(showExpirySettings))
-        _ = add("满额自动 hello…", #selector(showHelloSettings))
-        let hideEmail = add("隐藏邮箱", #selector(toggleEmailPrivacy))
+        _ = add(L10n.text("状态栏显示…"), #selector(showSettings))
+        _ = add(L10n.text("重置卡临期处理…"), #selector(showExpirySettings))
+        _ = add(L10n.text("满额自动 hello…"), #selector(showHelloSettings))
+        let hideEmail = add(L10n.text("隐藏邮箱"), #selector(toggleEmailPrivacy))
         hideEmail.state = UserDefaults.standard.bool(forKey: "privacyMode") ? .on : .off
         hideEmail.image = NSImage(systemSymbolName: "eye.slash", accessibilityDescription: nil)
-        let appearance = NSMenuItem(title: "外观", action: nil, keyEquivalent: "")
+        let appearance = NSMenuItem(title: L10n.text("外观"), action: nil, keyEquivalent: "")
         let submenu = NSMenu()
         let selected = UserDefaults.standard.string(forKey: "appearance") ?? AppAppearance.system.rawValue
         for option in AppAppearance.allCases {
@@ -591,24 +591,24 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
         let startup = add(loginItem.title, #selector(toggleLoginItem))
         startup.state = loginItem.needsApproval ? .mixed : (loginItem.isRequested ? .on : .off)
         if loginItem.needsApproval {
-            _ = add("在系统设置中允许…", #selector(openLoginItemSettings))
+            _ = add(L10n.text("在系统设置中允许…"), #selector(openLoginItemSettings))
         }
         menu.addItem(.separator())
-        _ = add("打开独立窗口", #selector(showDashboard))
-        add("选择 Codex CLI…", #selector(chooseExecutable)).isEnabled = !monitor.isBusy && monitor.loginID == nil
+        _ = add(L10n.text("打开独立窗口"), #selector(showDashboard))
+        add(L10n.text("选择 Codex CLI…"), #selector(chooseExecutable)).isEnabled = !monitor.isBusy && monitor.loginID == nil
         if monitor.account != nil {
             menu.addItem(.separator())
-            add("退出账号", #selector(logout)).isEnabled = !monitor.isBusy && monitor.loginID == nil
+            add(L10n.text("退出账号"), #selector(logout)).isEnabled = !monitor.isBusy && monitor.loginID == nil
         }
         menu.addItem(.separator())
         if let updates {
             if updates.availableVersion != nil { _ = add(updates.menuTitle, #selector(openUpdate)) }
-            add(updates.isChecking ? "正在检查更新…" : "检查更新…", #selector(checkUpdates)).isEnabled = !updates.isChecking
+            add(updates.isChecking ? L10n.text("正在检查更新…") : L10n.text("检查更新…"), #selector(checkUpdates)).isEnabled = !updates.isChecking
         }
-        _ = add("使用帮助", #selector(showHelp))
-        _ = add("关于 Codex Watcher", #selector(showAbout))
+        _ = add(L10n.text("使用帮助"), #selector(showHelp))
+        _ = add(L10n.text("关于 Codex Watcher"), #selector(showAbout))
         menu.addItem(.separator())
-        _ = add("退出应用", #selector(quit))
+        _ = add(L10n.text("退出应用"), #selector(quit))
         return menu
     }
 
@@ -619,7 +619,7 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
                 onClose: { [weak self] in self?.settingsWindow?.close() }))
             hosting.sizingOptions = [.minSize, .maxSize]
             let window = NSWindow(contentViewController: hosting)
-            window.title = "状态栏显示"
+            window.title = L10n.text("状态栏显示")
             window.styleMask = [.titled, .closable]
             window.isReleasedWhenClosed = false
             window.center()
@@ -636,7 +636,7 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
                 onClose: { [weak self] in self?.expirySettingsWindow?.close() }))
             hosting.sizingOptions = [.minSize, .maxSize]
             let window = NSWindow(contentViewController: hosting)
-            window.title = "重置卡临期处理"
+            window.title = L10n.text("重置卡临期处理")
             window.styleMask = [.titled, .closable]
             window.isReleasedWhenClosed = false
             window.center()
@@ -653,7 +653,7 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
                 onClose: { [weak self] in self?.helloSettingsWindow?.close() }))
             hosting.sizingOptions = [.minSize, .maxSize]
             let window = NSWindow(contentViewController: hosting)
-            window.title = "满额自动 hello"
+            window.title = L10n.text("满额自动 hello")
             window.styleMask = [.titled, .closable]
             window.isReleasedWhenClosed = false
             window.center()
@@ -676,7 +676,7 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
             }))
         hosting.sizingOptions = [.minSize, .maxSize]
         let window = NSWindow(contentViewController: hosting)
-        window.title = confirmation.retry == nil ? "使用重置卡" : "重试重置"
+        window.title = confirmation.retry == nil ? L10n.text("使用重置卡") : L10n.text("重试重置")
         window.styleMask = [.titled, .closable]
         window.isReleasedWhenClosed = false
         window.center()

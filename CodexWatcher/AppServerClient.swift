@@ -70,7 +70,7 @@ final class AppServerClient {
 
     private func launch() throws {
         guard FileManager.default.isExecutableFile(atPath: executablePath) else {
-            throw WatcherError.message("未找到 Codex CLI，请安装后选择 codex 可执行文件。")
+            throw WatcherError.message(L10n.text("未找到 Codex CLI，请安装后选择 codex 可执行文件。"))
         }
         try FileManager.default.createDirectory(at: runtimeDirectory, withIntermediateDirectories: true,
                                                attributes: [.posixPermissions: 0o700])
@@ -122,14 +122,14 @@ final class AppServerClient {
         output = stdout.fileHandleForReading
         buffer.removeAll()
         do { try proc.run() }
-        catch { stop(); throw WatcherError.message("Codex CLI 启动失败：\(error.localizedDescription)") }
+        catch { stop(); throw WatcherError.message(L10n.text("Codex CLI 启动失败：\(error.localizedDescription)")) }
         readTask = Task { @MainActor [weak self] in
             for await bytes in stream {
                 guard let self, generation == currentGeneration, !Task.isCancelled else { return }
                 receive(bytes)
             }
             guard let self, generation == currentGeneration, !Task.isCancelled else { return }
-            stop(reason: "Codex 连接已断开，请刷新重连。")
+            stop(reason: L10n.text("Codex 连接已断开，请刷新重连。"))
         }
     }
 
@@ -141,7 +141,7 @@ final class AppServerClient {
                 do { try await Task.sleep(for: self?.requestTimeout ?? .seconds(30)) } catch { return }
                 if self?.pending[id] != nil {
                     // Recreate a wedged transport on the next refresh. Persisted redemptions remain retryable.
-                    self?.stop(reason: "请求超时，请刷新重连。")
+                    self?.stop(reason: L10n.text("请求超时，请刷新重连。"))
                 }
             }
             pending[id] = (continuation, timeout)
@@ -158,7 +158,7 @@ final class AppServerClient {
 
     private func send(_ message: [String: Any]) throws {
         guard let input, process?.isRunning == true else {
-            throw WatcherError.message("Codex 尚未连接。")
+            throw WatcherError.message(L10n.text("Codex 尚未连接。"))
         }
         var bytes = try JSONSerialization.data(withJSONObject: message)
         bytes.append(0x0a)
@@ -169,7 +169,7 @@ final class AppServerClient {
         buffer.append(bytes)
         // Bound malformed output without keeping an unbounded buffer in memory.
         guard buffer.count < 8 * 1024 * 1024 else {
-            stop(reason: "Codex 返回的数据超出预期。")
+            stop(reason: L10n.text("Codex 返回的数据超出预期。"))
             return
         }
         while let newline = buffer.firstIndex(of: 0x0a) {
@@ -181,17 +181,17 @@ final class AppServerClient {
                 if let error = object["error"] as? [String: Any] {
                     // Server errors can contain request details. Keep only the numerical code.
                     let code = error["code"] as? Int ?? -1
-                    entry.0.resume(throwing: WatcherError.message("Codex 请求失败（\(code)），请检查登录状态或 CLI 版本。"))
+                    entry.0.resume(throwing: WatcherError.message(L10n.text("Codex 请求失败（\(String(code))），请检查登录状态或 CLI 版本。")))
                 } else if let result = object["result"],
                           let data = try? JSONSerialization.data(withJSONObject: result, options: [.fragmentsAllowed]) {
                     entry.0.resume(returning: data)
                 } else {
-                    entry.0.resume(throwing: WatcherError.message("Codex 返回了无法识别的数据。"))
+                    entry.0.resume(throwing: WatcherError.message(L10n.text("Codex 返回了无法识别的数据。")))
                 }
             } else if automaticHello, object["method"] != nil, let requestID = object["id"] {
                 // Never grant permissions or execute client-side tools for a hello.
                 try? send(["id": requestID, "error": ["code": -32601, "message": "Unsupported request"]])
-                stop(reason: "自动 hello 请求了额外能力，已停止。")
+                stop(reason: L10n.text("自动 hello 请求了额外能力，已停止。"))
                 return
             } else if let method = object["method"] as? String, object["id"] == nil {
                 onNotification?(method, object["params"] as? [String: Any] ?? [:])
@@ -199,7 +199,7 @@ final class AppServerClient {
         }
     }
 
-    func stop(reason: String = "连接已关闭。") {
+    func stop(reason: String = L10n.text("连接已关闭。")) {
         generation = UUID()
         isReady = false
         readTask?.cancel()

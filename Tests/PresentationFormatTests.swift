@@ -4,6 +4,17 @@ import XCTest
 final class PresentationFormatTests: XCTestCase {
     private let shanghai = TimeZone(identifier: "Asia/Shanghai")!
 
+    func testCreditExpiryBadgesFollowExplicitLocale() {
+        let english = PresentationFormat(locale: Locale(identifier: "en_US"), timeZone: shanghai)
+        let chinese = PresentationFormat(locale: Locale(identifier: "zh_CN"), timeZone: shanghai)
+        XCTAssertEqual(english.creditExpiryTitle(.today), "Expires today")
+        XCTAssertEqual(english.creditExpiryTitle(.tomorrow), "Expires tomorrow")
+        XCTAssertEqual(english.creditExpiryTitle(.withinThreeDays), "Within 3 days")
+        XCTAssertEqual(chinese.creditExpiryTitle(.today), "今日到期")
+        XCTAssertEqual(chinese.creditExpiryTitle(.tomorrow), "明日到期")
+        XCTAssertEqual(chinese.creditExpiryTitle(.withinThreeDays), "三天内")
+    }
+
     func testCreditExpiryUsesLocalDatesAndOmitsExpiredOrDistantCards() throws {
         let format = PresentationFormat(locale: Locale(identifier: "zh_CN"), timeZone: shanghai)
         let parser = ISO8601DateFormatter()

@@ -34,7 +34,7 @@ struct ResetConfirmationContent: View {
             VStack(alignment: .leading, spacing: 12) {
                 Text(cardTitle).font(.system(size: 12, weight: .semibold))
                 Divider()
-                detail("账号", account)
+                detail(String(localized: "账号"), account)
                 VStack(alignment: .leading, spacing: 5) {
                     detail(quotaTitle, usage)
                     if let updated {
@@ -42,15 +42,15 @@ struct ResetConfirmationContent: View {
                             .frame(maxWidth: .infinity, alignment: .trailing)
                     }
                 }
-                detail("卡片到期", expiry)
+                detail(String(localized: "卡片到期"), expiry)
             }
             .padding(14)
             .background(palette.surface, in: RoundedRectangle(cornerRadius: 12))
             .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(palette.separator))
 
             Text(isRetry
-                 ? "将重试原操作，同一请求标识用于避免重复消费。重置范围由服务器决定。"
-                 : "重置范围由服务器决定，可能包含其他额度窗口。")
+                 ? L10n.text("将重试原操作，同一请求标识用于避免重复消费。重置范围由服务器决定。")
+                 : L10n.text("重置范围由服务器决定，可能包含其他额度窗口。"))
                 .font(.system(size: 11)).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true).lineSpacing(3)
 

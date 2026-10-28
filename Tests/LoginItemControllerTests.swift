@@ -18,7 +18,7 @@ final class LoginItemControllerTests: XCTestCase {
         XCTAssertFalse(controller.isRequested)
         try controller.setEnabled(true)
         XCTAssertTrue(controller.needsApproval)
-        XCTAssertTrue(controller.title.contains("待系统允许"))
+        XCTAssertEqual(controller.title, L10n.text("登录时启动（待系统允许）"))
         try controller.setEnabled(true)
         XCTAssertEqual(registrations, 1, "Do not re-register a pending approval")
         try controller.setEnabled(false)

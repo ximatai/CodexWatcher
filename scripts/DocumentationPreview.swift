@@ -5,9 +5,13 @@ import SwiftUI
 // fake process that rejects every method except initialization and reads.
 @main
 struct DocumentationPreview {
+    private static var previewLocale: Locale {
+        Locale(identifier: UserDefaults.standard.string(forKey: "AppleLocale") ?? "zh_CN")
+    }
+
     @MainActor static func main() async throws {
         let arguments = CommandLine.arguments
-        guard arguments.count == 2 else { fatalError("Pass the screenshot output directory") }
+        guard arguments.count >= 2 else { fatalError("Pass the screenshot output directory") }
         let output = URL(fileURLWithPath: arguments[1], isDirectory: true)
         try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
         let app = NSApplication.shared
@@ -125,9 +129,20 @@ struct DocumentationPreview {
         try await render(MenuBarSettingsView(monitor: monitor).defaultAppStorage(defaults),
                          size: NSSize(width: 380, height: 280), dark: false,
                          to: output.appendingPathComponent("menu-bar-settings.png"))
-        let format = PresentationFormat(locale: Locale(identifier: "zh_CN"), timeZone: TimeZone(identifier: "Asia/Shanghai")!)
-        try await render(ResetConfirmationContent(isRetry: false, cardTitle: "完整额度重置卡",
-                         account: "demo@example.com", quotaTitle: "7天额度", usage: "已用 35% · 剩余 65%",
+        let resetStore = ResetAttemptStore(directory: temporary.appendingPathComponent("State"))
+        let pending = try resetStore.prepareNew(creditID: "demo-card-1", owner: "documentation-demo")!
+        await monitor.refresh()
+        await monitor.waitForTrendPersistence()
+        try await render(ContentView(monitor: monitor, flexibleSize: true).defaultAppStorage(defaults),
+                         size: NSSize(width: 390, height: 850), dark: false,
+                         to: output.appendingPathComponent("dashboard-pending-reset.png"))
+        try resetStore.clear(owner: "documentation-demo", idempotencyKey: pending.idempotencyKey)
+        await monitor.refresh()
+        await monitor.waitForTrendPersistence()
+        let format = PresentationFormat(locale: previewLocale, timeZone: TimeZone(identifier: "Asia/Shanghai")!)
+        try await render(ResetConfirmationContent(isRetry: false, cardTitle: format.creditTitle("Full reset"),
+                         account: "demo@example.com", quotaTitle: format.quotaDuration(10080),
+                         usage: String(format: String(localized: "已用 %@ · 剩余 %@"), format.percent(35), format.percent(65)),
                          expiry: format.date(Date(timeIntervalSince1970: todayExpiry), precise: true),
                          updated: format.date(Date(), timeOnly: true), blockingReason: nil, canConfirm: true,
                          cancel: {}, confirm: {}), size: NSSize(width: 370, height: 316), dark: false,
@@ -181,7 +196,7 @@ struct DocumentationPreview {
         let appearance = NSAppearance(named: dark ? .darkAqua : .aqua)!
         NSApplication.shared.appearance = appearance
         let hosting = NSHostingView(rootView: view
-            .environment(\.locale, Locale(identifier: "zh_CN"))
+            .environment(\.locale, previewLocale)
             .environment(\.timeZone, TimeZone(identifier: "Asia/Shanghai")!)
             .preferredColorScheme(dark ? .dark : .light)
             .frame(width: size.width, height: size.height)

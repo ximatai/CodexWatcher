@@ -1,0 +1,508 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>%@ percentage points</key>
+	<string>%@ pp</string>
+	<key>%@ quota</key>
+	<string>%@ quota</string>
+	<key>%@ 到期</key>
+	<string>Expires %@</string>
+	<key>%@后重置</key>
+	<string>Resets in %@</string>
+	<key>%@，已用 %@</key>
+	<string>%@, %@ used</string>
+	<key>CLI 未提供独立临时会话，已跳过自动 hello。</key>
+	<string>The CLI did not provide an isolated temporary session. Automatic hello was skipped.</string>
+	<key>Codex CLI 启动失败：%@</key>
+	<string>Unable to start Codex CLI: %@</string>
+	<key>Codex Watcher</key>
+	<string>Codex Watcher</string>
+	<key>Codex Watcher · 左键查看用量，右键打开设置</key>
+	<string>Codex Watcher · Left-click for usage, right-click for settings.</string>
+	<key>Codex Watcher · 用量待更新，偏移暂不可用。左键查看用量，右键打开设置</key>
+	<string>Codex Watcher · Usage needs updating; deviation unavailable. Left-click for usage, right-click for settings.</string>
+	<key>Codex 尚未连接。</key>
+	<string>Codex is not connected.</string>
+	<key>Codex 请求失败（%@），请检查登录状态或 CLI 版本。</key>
+	<string>Codex request failed (%@). Check your sign-in status or CLI version.</string>
+	<key>Codex 返回了无法识别的数据。</key>
+	<string>Codex returned unrecognized data.</string>
+	<key>Codex 返回的数据超出预期。</key>
+	<string>Codex returned more data than expected.</string>
+	<key>Codex 连接已断开，请刷新重连。</key>
+	<string>Codex disconnected. Refresh to reconnect.</string>
+	<key>Full reset</key>
+	<string>Full reset</string>
+	<key>GitHub 请求受限，请稍后重试。</key>
+	<string>GitHub requests are limited. Try again later.</string>
+	<key>Less than a minute</key>
+	<string>Less than a minute</string>
+	<key>Quota window</key>
+	<string>Quota window</string>
+	<key>Rate-limit reset</key>
+	<string>Rate-limit reset</string>
+	<key>hello 已完成</key>
+	<string>hello completed</string>
+	<key>hello 已完成，最新额度暂未读取成功。</key>
+	<string>hello completed. The latest quota could not be read yet.</string>
+	<key>三天内</key>
+	<string>Within 3 days</string>
+	<key>上次选择的重置卡</key>
+	<string>Previously selected credit</string>
+	<key>上次重置结果未确认</key>
+	<string>Last reset result unconfirmed</string>
+	<key>临期处理</key>
+	<string>Expiry handling</string>
+	<key>临期处理记录不可用，已跳过操作。请检查本地状态文件。</key>
+	<string>Expiry handling records are unavailable. The operation was skipped. Check the local state file.</string>
+	<key>临期提醒已开启</key>
+	<string>Expiry reminders enabled</string>
+	<key>临期通知未发送，请检查系统通知权限。</key>
+	<string>The expiry notification was not sent. Check notification permissions in System Settings.</string>
+	<key>亮色</key>
+	<string>Light</string>
+	<key>仅 Mac 唤醒且应用运行时生效</key>
+	<string>Only works while your Mac is awake and the app is running</string>
+	<key>今日到期</key>
+	<string>Expires today</string>
+	<key>仪表盘</key>
+	<string>Gauge</string>
+	<key>会消耗模型额度，仅在应用运行且 Mac 唤醒时生效。</key>
+	<string>Consumes model quota; only works while the app is running and your Mac is awake.</string>
+	<key>使用</key>
+	<string>Use</string>
+	<key>使用 ChatGPT 连接</key>
+	<string>Connect with ChatGPT</string>
+	<key>使用%@</key>
+	<string>Use %@</string>
+	<key>使用帮助</key>
+	<string>Usage Help</string>
+	<key>使用重置卡</key>
+	<string>Use Reset Credit</string>
+	<key>信息未提供</key>
+	<string>Not provided</string>
+	<key>关于 Codex Watcher</key>
+	<string>About Codex Watcher</string>
+	<key>关闭</key>
+	<string>Off</string>
+	<key>关闭提示</key>
+	<string>Dismiss notice</string>
+	<key>切换到剩余额度趋势面板</key>
+	<string>Switch to the remaining quota trend panel</string>
+	<key>到期前 15 分钟会自动使用重置卡，失败时最多重试 2 次。
+
+即使当前额度非常充裕，甚至没有使用，也会尝试使用重置卡。卡片消耗后无法恢复。</key>
+	<string>Reset credits are used automatically 15 minutes before expiry, retrying up to 2 times on failure.
+
+This runs even when quota is plentiful or unused. Consumed credits cannot be restored.</string>
+	<key>到期前 15 分钟处理</key>
+	<string>Handle 15 minutes before expiry</string>
+	<key>刷新</key>
+	<string>Refresh</string>
+	<key>刷新额度</key>
+	<string>Refresh quota</string>
+	<key>前往下载</key>
+	<string>Download</string>
+	<key>剩余 %@</key>
+	<string>%@ remaining</string>
+	<key>剩余额度</key>
+	<string>Remaining quota</string>
+	<key>剩余额度趋势</key>
+	<string>Remaining quota trend</string>
+	<key>卡片到期</key>
+	<string>Card Expiry</string>
+	<key>卡片当前不可用</key>
+	<string>This credit is currently unavailable</string>
+	<key>卡片消耗后无法撤销</key>
+	<string>Credit consumption cannot be undone</string>
+	<key>卡片消耗后无法撤销；最多尝试 3 次，间隔至少 30 秒，始终复用原请求。</key>
+	<string>Credit consumption cannot be undone; up to 3 attempts at least 30 seconds apart, always reusing the original request.</string>
+	<key>历史</key>
+	<string>History</string>
+	<key>历史数据已恢复，正在重新采样</key>
+	<string>History recovered. Collecting new data.</string>
+	<key>原卡片状态或到期时间已变化，已停止自动重试。</key>
+	<string>The original credit status or expiry changed. Automatic retries stopped.</string>
+	<key>原额度窗口不可用</key>
+	<string>Original quota window unavailable</string>
+	<key>参考进度</key>
+	<string>Reference pace</string>
+	<key>发现新版本 %@</key>
+	<string>Version %@ Available</string>
+	<key>取消</key>
+	<string>Cancel</string>
+	<key>可能消耗 1 张 · 操作无法撤销</key>
+	<string>May consume 1 credit · Cannot be undone</string>
+	<key>启用</key>
+	<string>Enable</string>
+	<key>启用自动使用？</key>
+	<string>Enable automatic use?</string>
+	<key>图标</key>
+	<string>Icon</string>
+	<key>圆环</key>
+	<string>Ring</string>
+	<key>在系统设置中允许…</key>
+	<string>Allow in System Settings…</string>
+	<key>处理方式</key>
+	<string>Handling</string>
+	<key>外观</key>
+	<string>Appearance</string>
+	<key>好</key>
+	<string>OK</string>
+	<key>安装帮助</key>
+	<string>Installation Help</string>
+	<key>完成</key>
+	<string>Done</string>
+	<key>实际用量减去参考进度，pp 表示百分点。</key>
+	<string>Actual usage minus reference pace; pp means percentage points.</string>
+	<key>实际用量减去参考进度，单位为百分点。</key>
+	<string>Actual usage minus reference pace, in percentage points.</string>
+	<key>将为此账号在所选额度恢复满额时自动发送一次 hello，会消耗模型额度。当前已满额时也会发送。</key>
+	<string>Sends one hello automatically when the selected quota returns to full for this account; consumes model quota. Also sends when quota is already full.</string>
+	<key>将重试原操作，同一请求标识用于避免重复消费。重置范围由服务器决定。</key>
+	<string>Retries the original operation; the same request identifier prevents duplicate consumption. The reset scope is decided by the server.</string>
+	<key>尚未确认重置结果。可重试原重置操作；若此前尚未完成，可能消耗 1 张卡。同一请求标识用于避免重复消费，操作无法撤销。</key>
+	<string>The reset result is unconfirmed. You can retry the original operation; if it has not completed, this may consume 1 credit. Reusing the request identifier prevents duplicate consumption. This cannot be undone.</string>
+	<key>尚未连接</key>
+	<string>Not connected</string>
+	<key>已到期，等待刷新</key>
+	<string>Expired, waiting for refresh</string>
+	<key>已发送临期提醒，确认后才会使用卡片。</key>
+	<string>Expiry reminder sent. The credit will only be used after confirmation.</string>
+	<key>已是最新版本</key>
+	<string>You’re Up to Date</string>
+	<key>已有待确认重置，请先核实原请求。</key>
+	<string>A reset is awaiting confirmation. Verify the original request first.</string>
+	<key>已用</key>
+	<string>Used</string>
+	<key>已用 %@ · 剩余 %@</key>
+	<string>Used %@ · Remaining %@</string>
+	<key>已用 %@；参考进度 %@；偏移 %@</key>
+	<string>Used %@; reference pace %@; deviation %@</string>
+	<key>已用 %@；参考进度 %@；较参考进度 %@</key>
+	<string>Used %@; reference pace %@; vs pace %@</string>
+	<key>已用百分比</key>
+	<string>Used percentage</string>
+	<key>已隐藏</key>
+	<string>Hidden</string>
+	<key>开启</key>
+	<string>Enable</string>
+	<key>开启满额自动 hello？</key>
+	<string>Enable automatic hello at full quota?</string>
+	<key>当前不可用，请取消并刷新。</key>
+	<string>Currently unavailable; cancel and refresh.</string>
+	<key>当前没有可用的重置卡。</key>
+	<string>No reset credits are available.</string>
+	<key>当前没有符合条件的额度可重置。</key>
+	<string>No eligible quota to reset.</string>
+	<key>当前用量</key>
+	<string>Current usage</string>
+	<key>当前额度已耗尽，等待重置。</key>
+	<string>Quota exhausted. Waiting for reset.</string>
+	<key>待更新</key>
+	<string>Pending update</string>
+	<key>待核实</key>
+	<string>Needs verification</string>
+	<key>待重试 · %lld/3</key>
+	<string>Retry pending · %lld/3</string>
+	<key>所选重置卡或额度状态已变化，请刷新后重新确认。</key>
+	<string>The selected credit or quota changed. Refresh and confirm again.</string>
+	<key>打开独立窗口</key>
+	<string>Open Dashboard Window</string>
+	<key>打开确认页</key>
+	<string>Opens the confirmation page</string>
+	<key>打开系统设置</key>
+	<string>Open System Settings</string>
+	<key>按额度周期的自然时间计算，包含睡眠和休息时间。</key>
+	<string>Based on elapsed time in the quota window, including sleep and idle time.</string>
+	<key>提醒后确认</key>
+	<string>Remind, then confirm</string>
+	<key>提醒对应的账号或卡片已变化，请在面板重新查看。</key>
+	<string>The account or credit associated with the reminder changed. Review it in the dashboard.</string>
+	<key>操作已变化，请取消后重新打开。</key>
+	<string>The operation changed; cancel and reopen.</string>
+	<key>操作已变化，请重新打开确认页。</key>
+	<string>The operation changed. Reopen the confirmation page.</string>
+	<key>敏感信息已隐藏</key>
+	<string>Sensitive information hidden</string>
+	<key>数据待更新</key>
+	<string>Data needs update</string>
+	<key>数据待更新，预测已暂停。</key>
+	<string>Data needs updating. Forecast paused.</string>
+	<key>新版本 %@…</key>
+	<string>Version %@ Available…</string>
+	<key>无图标</key>
+	<string>No icon</string>
+	<key>无法保存临期处理设置。</key>
+	<string>Unable to save expiry handling settings.</string>
+	<key>无法保存自动 hello 设置。</key>
+	<string>Unable to save automatic hello settings.</string>
+	<key>无法保存趋势数据，请检查本地存储。</key>
+	<string>Unable to save trend data. Check local storage.</string>
+	<key>无法打开浏览器，请检查默认浏览器设置。</key>
+	<string>Unable to open the browser. Check your default browser settings.</string>
+	<key>无法更新登录启动设置</key>
+	<string>Unable to Change Login Settings</string>
+	<key>早于重置约 %@</key>
+	<string>About %@ before reset</string>
+	<key>时间</key>
+	<string>Time</string>
+	<key>明日到期</key>
+	<string>Expires tomorrow</string>
+	<key>暂无可用重置卡</key>
+	<string>No reset credits available</string>
+	<key>暂无数据</key>
+	<string>No data</string>
+	<key>暂无额度数据</key>
+	<string>No quota data</string>
+	<key>暂时无法检查更新</key>
+	<string>Unable to Check for Updates</string>
+	<key>暗色</key>
+	<string>Dark</string>
+	<key>更新于 %@</key>
+	<string>Updated %@</string>
+	<key>最新额度读取失败，请重新读取。</key>
+	<string>Unable to read the latest quota. Reload it.</string>
+	<key>最早 %@</key>
+	<string>Earliest %@</string>
+	<key>最近一次成功检查</key>
+	<string>Last successful check</string>
+	<key>有效期未提供</key>
+	<string>Expiry not provided</string>
+	<key>有重置卡将在 15 分钟内到期。点击查看用量与有效期，确认后使用。</key>
+	<string>A reset credit expires within 15 minutes. Review its usage and expiry before confirming use.</string>
+	<key>服务器未提供全部卡片详情。</key>
+	<string>The server did not provide details for all credits.</string>
+	<key>服务端未提供稳定账号标识，无法开启自动使用。</key>
+	<string>The server did not provide a stable account identifier. Automatic use cannot be enabled.</string>
+	<key>未找到 Codex CLI，请安装后选择 codex 可执行文件。</key>
+	<string>Codex CLI was not found. Install it and select the codex executable.</string>
+	<key>未找到可用的默认文本模型，已跳过自动 hello。</key>
+	<string>No default text model is available. Automatic hello was skipped.</string>
+	<key>未提供</key>
+	<string>Not provided</string>
+	<key>未提供邮箱</key>
+	<string>No email provided</string>
+	<key>未知</key>
+	<string>Unknown</string>
+	<key>未获得通知权限。请在系统设置中允许 Codex Watcher 通知后重试。</key>
+	<string>Notifications are not authorized. Allow Codex Watcher notifications in System Settings and try again.</string>
+	<key>本次 hello 结果未确认。</key>
+	<string>The result of this hello is unconfirmed.</string>
+	<key>本次不再补发</key>
+	<string>No retry this time</string>
+	<key>查看并确认</key>
+	<string>Review and Confirm</string>
+	<key>查看并确认使用</key>
+	<string>Review before using</string>
+	<key>查看额度趋势</key>
+	<string>View quota trend</string>
+	<key>根据最近一小时的消耗速度推算，至少需要 10 分钟及 3 个采样点。实线为历史，虚线为预测；淡色范围来自已观测的不同消耗速度，并非统计置信区间。预测随使用强度变化，仅供参考；中断采样或额度恢复后重新积累样本。</key>
+	<string>Based on usage over the past hour; requires at least 3 samples over 10 minutes. Solid lines show history; dashed lines show forecasts. Shading reflects observed speeds, not a confidence interval. Estimates change with usage. Sampling restarts after gaps or quota recovery.</string>
+	<key>检查更新…</key>
+	<string>Check for Updates…</string>
+	<key>正在发送…</key>
+	<string>Sending…</string>
+	<key>正在更新，请稍候</key>
+	<string>Updating, please wait</string>
+	<key>正在更新，请稍候。</key>
+	<string>Updating, please wait.</string>
+	<key>正在更新，请稍后在面板查看重置卡。</key>
+	<string>Updating. Check reset credits in the dashboard shortly.</string>
+	<key>正在检查更新…</key>
+	<string>Checking for Updates…</string>
+	<key>正在积累数据</key>
+	<string>Collecting data</string>
+	<key>正在连接…</key>
+	<string>Connecting…</string>
+	<key>正在重置</key>
+	<string>Resetting</string>
+	<key>正在重置…</key>
+	<string>Resetting…</string>
+	<key>每 30 秒检查。发送后以最新用量为基线，额外使用至少 1 个百分点、再恢复满额后才重新触发。关闭或重启不会清除去重记录；未知结果不补发。</key>
+	<string>Checks every 30 seconds. After sending, it re-triggers only after at least 1 additional percentage point of use and a return to full quota. Closing or restarting does not clear the dedup record; unknown results are not retried.</string>
+	<key>每 5 分钟刷新</key>
+	<string>Refreshes every 5 minutes</string>
+	<key>消耗 1 张 · 操作无法撤销</key>
+	<string>Consumes 1 credit · Cannot be undone</string>
+	<key>消耗 1 张并重置</key>
+	<string>Consume 1 and Reset</string>
+	<key>消耗滞后</key>
+	<string>Behind pace</string>
+	<key>消耗超前</key>
+	<string>Ahead of pace</string>
+	<key>满额时发送一次 hello</key>
+	<string>Send one hello when quota is full</string>
+	<key>满额自动 hello</key>
+	<string>Automatic Hello at Full Quota</string>
+	<key>满额自动 hello…</key>
+	<string>Automatic Hello at Full Quota…</string>
+	<key>点击查看趋势；刻度为参考进度，按额度周期的自然时间计算。</key>
+	<string>Click to view trend. The marker shows reference progress based on elapsed time in the quota window.</string>
+	<key>状态栏显示</key>
+	<string>Menu Bar Display</string>
+	<key>状态栏显示…</key>
+	<string>Menu Bar Display…</string>
+	<key>状态栏预览 %@</key>
+	<string>Menu bar preview %@</string>
+	<key>现在</key>
+	<string>Now</string>
+	<key>用量偏移</key>
+	<string>Usage deviation</string>
+	<key>用量图表</key>
+	<string>Usage chart</string>
+	<key>用量已失效，请取消并刷新。</key>
+	<string>Usage is stale; cancel and refresh.</string>
+	<key>登录时启动</key>
+	<string>Launch at Login</string>
+	<key>登录时启动（待系统允许）</key>
+	<string>Launch at Login (Approval Required)</string>
+	<key>登录未完成，请重试；若官方客户端正在登录，请先完成该流程。</key>
+	<string>Sign-in did not complete. Try again; if the official client is signing in, finish that process first.</string>
+	<key>登录等待已结束，请重新连接。</key>
+	<string>Sign-in timed out. Connect again.</string>
+	<key>登录链接不可用，请更新 Codex CLI 后重试。</key>
+	<string>The sign-in link is unavailable. Update Codex CLI and try again.</string>
+	<key>等待浏览器完成登录…</key>
+	<string>Waiting for browser login…</string>
+	<key>等待重置更新</key>
+	<string>Waiting for reset update</string>
+	<key>自动 hello 回合标识无效。</key>
+	<string>The automatic hello turn identifier is invalid.</string>
+	<key>自动 hello 已停止。</key>
+	<string>Automatic hello stopped.</string>
+	<key>自动 hello 未能准备就绪，请检查 CLI、连接及本地记录。</key>
+	<string>Automatic hello could not be prepared. Check the CLI, connection, and local records.</string>
+	<key>自动 hello 条件已变化，已停止。</key>
+	<string>Automatic hello conditions changed. Stopped.</string>
+	<key>自动 hello 结果未确认。</key>
+	<string>The automatic hello result is unconfirmed.</string>
+	<key>自动 hello 请求了额外能力，已停止。</key>
+	<string>Automatic hello requested additional capabilities and was stopped.</string>
+	<key>自动使用</key>
+	<string>Use automatically</string>
+	<key>自动使用已尝试 3 次，请核实原请求。</key>
+	<string>Automatic use was attempted 3 times. Verify the original request.</string>
+	<key>自动使用已开启</key>
+	<string>Automatic use enabled</string>
+	<key>自动使用结果未确认，将重试原卡片（%lld/3）。</key>
+	<string>Automatic use is unconfirmed. The original credit will be retried (%lld/3).</string>
+	<key>自动处理每 30 秒检查并刷新</key>
+	<string>Auto-handling checks and refreshes every 30 seconds</string>
+	<key>设置与外观</key>
+	<string>Settings &amp; Appearance</string>
+	<key>详情暂不可用</key>
+	<string>Details unavailable</string>
+	<key>请先刷新额度</key>
+	<string>Refresh quota first</string>
+	<key>请先核实上次重置</key>
+	<string>Check the previous reset first</string>
+	<key>请先连接 ChatGPT 账号</key>
+	<string>Connect a ChatGPT account first</string>
+	<key>请先连接账号并刷新用量，再开启临期处理。</key>
+	<string>Connect an account and refresh usage before enabling expiry handling.</string>
+	<key>请先连接账号并刷新用量，再确认自动使用。</key>
+	<string>Connect an account and refresh usage before confirming automatic use.</string>
+	<key>请先连接账号并刷新额度。</key>
+	<string>Connect an account and refresh quota first.</string>
+	<key>请检查网络连接后重试。</key>
+	<string>Check your network connection and try again.</string>
+	<key>请求超时，请刷新重连。</key>
+	<string>The request timed out. Refresh to reconnect.</string>
+	<key>请确认应用已正确签名并放在固定位置（建议“应用程序”文件夹），然后重试。也可在系统设置中管理登录项。</key>
+	<string>Make sure the app is signed and stored in a permanent location, such as Applications, then try again. You can also manage login items in System Settings.</string>
+	<key>请选择可执行的 codex 文件。</key>
+	<string>Select an executable codex file.</string>
+	<key>账号</key>
+	<string>Account</string>
+	<key>账号、额度窗口或重置时间不可用，已暂停。</key>
+	<string>Account, quota window, or reset time unavailable. Paused.</string>
+	<key>账号不匹配 · 已暂停</key>
+	<string>Account mismatch · Paused</string>
+	<key>账号不匹配，已暂停。请关闭后重新开启。</key>
+	<string>Account mismatch; paused. Turn it off and on again.</string>
+	<key>账号已变化，请重新确认自动使用。</key>
+	<string>The account changed. Confirm automatic use again.</string>
+	<key>账号已变化，请重新设置。</key>
+	<string>The account changed. Configure this again.</string>
+	<key>账号或额度窗口已变化，请重新开启。</key>
+	<string>The account or quota window changed. Enable this again.</string>
+	<key>跟随系统</key>
+	<string>System</string>
+	<key>较参考进度</key>
+	<string>vs reference pace</string>
+	<key>较快消耗</key>
+	<string>Faster consumption</string>
+	<key>较慢消耗</key>
+	<string>Slower consumption</string>
+	<key>近期无消耗</key>
+	<string>No recent consumption</string>
+	<key>返回进度</key>
+	<string>Back to progress</string>
+	<key>连接已关闭。</key>
+	<string>Connection closed.</string>
+	<key>连接待恢复</key>
+	<string>Waiting to reconnect</string>
+	<key>退出应用</key>
+	<string>Quit App</string>
+	<key>退出账号</key>
+	<string>Sign Out</string>
+	<key>选择 CLI…</key>
+	<string>Choose CLI…</string>
+	<key>选择 Codex CLI 可执行文件</key>
+	<string>Choose the Codex CLI Executable</string>
+	<key>选择 Codex CLI…</key>
+	<string>Choose Codex CLI…</string>
+	<key>通知不可用。</key>
+	<string>Notifications are unavailable.</string>
+	<key>通知暂不可用，请重新开启提醒模式。</key>
+	<string>Notifications are unavailable. Enable reminder mode again.</string>
+	<key>通知权限不可用。</key>
+	<string>Notification permission is unavailable.</string>
+	<key>采样分段</key>
+	<string>Sampling segment</string>
+	<key>重新打开浏览器</key>
+	<string>Reopen Browser</string>
+	<key>重新读取</key>
+	<string>Reload</string>
+	<key>重置</key>
+	<string>Reset</string>
+	<key>重置卡</key>
+	<string>Reset credits</string>
+	<key>重置卡临期处理</key>
+	<string>Credit Expiry Handling</string>
+	<key>重置卡临期处理…</key>
+	<string>Credit Expiry Handling…</string>
+	<key>重置卡临期处理，%@</key>
+	<string>Credit expiry handling, %@</string>
+	<key>重置卡即将到期</key>
+	<string>Reset Credit Expiring Soon</string>
+	<key>重置已完成。</key>
+	<string>Reset completed.</string>
+	<key>重置结果未知，请重试原重置操作。</key>
+	<string>The reset result is unknown. Retry the original operation.</string>
+	<key>重置范围由服务器决定，可能包含其他额度窗口。</key>
+	<string>The reset scope is decided by the server and may include other quota windows.</string>
+	<key>重试上次重置</key>
+	<string>Retry Last Reset</string>
+	<key>重试重置</key>
+	<string>Retry Reset</string>
+	<key>闪电</key>
+	<string>Bolt</string>
+	<key>隐藏邮箱</key>
+	<string>Hide Email</string>
+	<key>预测</key>
+	<string>Forecast</string>
+	<key>预测剩余</key>
+	<string>Forecast remaining</string>
+	<key>预计 %@后耗尽</key>
+	<string>Estimated exhaustion in %@</string>
+	<key>预计可用到本次重置</key>
+	<string>Expected to last until reset</string>
+	<key>额度窗口</key>
+	<string>Quota window</string>
+	<key>（已到期）</key>
+	<string> (expired)</string>
+</dict>
+</plist>

@@ -414,7 +414,7 @@ final class UsageMonitorTests: XCTestCase {
         await task.value
         XCTAssertEqual(try fixture.consumeRequests().count, 1)
         XCTAssertEqual(try fixture.helloRequests().count, 1)
-        XCTAssertEqual(fixture.monitor.notice, "重置已完成。")
+        XCTAssertEqual(fixture.monitor.notice, L10n.text("重置已完成。"))
         XCTAssertFalse(fixture.monitor.isSendingHello)
     }
 
@@ -689,7 +689,7 @@ final class UsageMonitorTests: XCTestCase {
         try fixture.marker("hang-consume")
         await fixture.monitor.processExpiringCredits()
         let pending = try XCTUnwrap(fixture.monitor.pendingRedemption)
-        XCTAssertEqual(fixture.monitor.expiryStatusTitle, "待重试 · 1/3")
+        XCTAssertEqual(fixture.monitor.expiryStatusTitle, L10n.text("待重试 · \(1)/3"))
         XCTAssertNotNil(fixture.monitor.automaticRetryDate, "An unknown write result must retain its retry schedule")
         try fixture.removeMarker("hang-consume")
         await fixture.monitor.processExpiringCredits()
@@ -966,7 +966,7 @@ final class UsageMonitorTests: XCTestCase {
         let confirmation = try XCTUnwrap(fixture.monitor.makeResetConfirmation(for: card))
         try fixture.marker("reject-after-consume")
         await fixture.monitor.redeem(confirmation)
-        XCTAssertEqual(fixture.monitor.notice, "重置已完成。")
+        XCTAssertEqual(fixture.monitor.notice, L10n.text("重置已完成。"))
         XCTAssertEqual(fixture.monitor.noticeKind, .success)
         XCTAssertNotNil(fixture.monitor.errorMessage)
         XCTAssertNil(fixture.monitor.pendingRedemption)
@@ -977,7 +977,7 @@ final class UsageMonitorTests: XCTestCase {
         try fixture.removeMarker("reject-usage")
         await fixture.monitor.refresh()
         XCTAssertNil(fixture.monitor.errorMessage)
-        XCTAssertEqual(fixture.monitor.notice, "重置已完成。")
+        XCTAssertEqual(fixture.monitor.notice, L10n.text("重置已完成。"))
         XCTAssertEqual(try fixture.consumeRequests().count, 1, "Recovery must only read")
         XCTAssertNil(fixture.monitor.redemptionBlockingReason(for: card, at: .now))
     }
@@ -990,7 +990,7 @@ final class UsageMonitorTests: XCTestCase {
         let confirmation = try XCTUnwrap(fixture.monitor.makeResetConfirmation(for: fixture.monitor.sortedCredits.first))
         await fixture.monitor.redeem(confirmation)
         XCTAssertEqual(fixture.monitor.noticeKind, .information)
-        XCTAssertEqual(fixture.monitor.notice, "当前没有符合条件的额度可重置。")
+        XCTAssertEqual(fixture.monitor.notice, L10n.text("当前没有符合条件的额度可重置。"))
         XCTAssertNil(fixture.monitor.pendingRedemption)
         XCTAssertEqual(try fixture.consumeRequests().count, 1)
     }
@@ -1283,7 +1283,7 @@ final class UsageMonitorTests: XCTestCase {
         await fixture.monitor.redeem(confirmation)
         XCTAssertTrue(try fixture.consumeRequests().isEmpty)
         XCTAssertNil(try fixture.store.pending(for: "account-a"))
-        XCTAssertEqual(fixture.monitor.notice, "操作已变化，请重新打开确认页。")
+        XCTAssertEqual(fixture.monitor.notice, L10n.text("操作已变化，请重新打开确认页。"))
     }
 
     func testPreflightRejectsDisappearedCardWithoutConsuming() async throws {
@@ -1329,7 +1329,7 @@ final class UsageMonitorTests: XCTestCase {
             await fixture.monitor.redeem(confirmation)
             XCTAssertTrue(try fixture.consumeRequests().isEmpty)
             XCTAssertEqual(try fixture.store.pending(for: "account-a")?.idempotencyKey, other.idempotencyKey)
-            XCTAssertEqual(fixture.monitor.notice, "操作已变化，请重新打开确认页。")
+            XCTAssertEqual(fixture.monitor.notice, L10n.text("操作已变化，请重新打开确认页。"))
         }
     }
 

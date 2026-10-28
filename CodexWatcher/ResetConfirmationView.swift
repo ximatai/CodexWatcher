@@ -20,13 +20,13 @@ struct ResetConfirmationView: View {
             let canConfirm = monitor.canConfirmRedemption(confirmation, at: now)
             ResetConfirmationContent(
                 isRetry: retry,
-                cardTitle: credit.map { format.creditTitle($0.title) } ?? "上次选择的重置卡",
-                account: hideEmail ? "已隐藏" : (confirmation.email ?? "未提供邮箱"),
-                quotaTitle: window.map { format.quotaDuration($0.quota.windowDurationMins) } ?? "当前用量",
-                usage: window.map { "已用 \(format.percent($0.quota.usedPercent)) · 剩余 \(format.percent(max(0, 100 - $0.quota.usedPercent)))" } ?? "暂无数据",
-                expiry: credit?.expiryDate.map { format.date($0, precise: true) + ($0 <= now ? "（已到期）" : "") } ?? (credit == nil ? "详情暂不可用" : "未提供"),
+                cardTitle: credit.map { format.creditTitle($0.title) } ?? String(localized: "上次选择的重置卡"),
+                account: hideEmail ? String(localized: "已隐藏") : (confirmation.email ?? String(localized: "未提供邮箱")),
+                quotaTitle: window.map { format.quotaDuration($0.quota.windowDurationMins) } ?? String(localized: "当前用量"),
+                usage: window.map { L10n.text("已用 \(format.percent($0.quota.usedPercent)) · 剩余 \(format.percent(max(0, 100 - $0.quota.usedPercent)))", locale: locale) } ?? String(localized: "暂无数据"),
+                expiry: credit?.expiryDate.map { format.date($0, precise: true) + ($0 <= now ? String(localized: "（已到期）") : "") } ?? (credit == nil ? String(localized: "详情暂不可用") : String(localized: "未提供")),
                 updated: current ? monitor.lastUpdated.map { format.date($0, timeOnly: Calendar.autoupdatingCurrent.isDateInToday($0)) } : nil,
-                blockingReason: !current ? "操作已变化，请取消后重新打开。" : (canConfirm ? nil : (monitor.isBusy ? "正在更新，请稍候。" : (!retry && monitor.isStale(at: now) ? "用量已失效，请取消并刷新。" : "当前不可用，请取消并刷新。"))),
+                blockingReason: !current ? String(localized: "操作已变化，请取消后重新打开。") : (canConfirm ? nil : (monitor.isBusy ? String(localized: "正在更新，请稍候。") : (!retry && monitor.isStale(at: now) ? String(localized: "用量已失效，请取消并刷新。") : String(localized: "当前不可用，请取消并刷新。")))),
                 canConfirm: canConfirm,
                 cancel: cancel,
                 confirm: {

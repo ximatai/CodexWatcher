@@ -85,7 +85,7 @@ final class ReleaseUpdateChecker {
         availableVersion.flatMap { URL(string: "https://github.com/ximatai/CodexWatcher/releases/tag/v\($0.description)") }
     }
     var menuTitle: String {
-        return availableVersion.map { "新版本 \($0.description)…" } ?? "检查更新…"
+        return availableVersion.map { L10n.text("新版本 \($0.description)…") } ?? L10n.text("检查更新…")
     }
     func check(force: Bool = false) async -> Result {
         guard !isChecking else { return .busy }
