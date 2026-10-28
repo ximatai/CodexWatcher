@@ -12,6 +12,7 @@
 | `LoginItemController.swift` | 通过 SMAppService 管理登录项，展示系统状态及待批准状态 |
 | `MenuBarLabelRenderer.swift` | 将图标与用量合成模板图，按 1x / 2x 可见像素对齐 |
 | `MenuBarConfiguration.swift` / `MenuBarSettingsView.swift` | 图标和文本组合规则、配置与预览 |
+| `UsageTrend.swift` / `UsageTrendView.swift` | 分账号的本地采样、连续分段、近期线性回归及 Swift Charts 剩余额度图表 |
 | `UsageMonitor.swift` | 主线程状态、默认 5 分钟轮询、临期 30 秒检查、登录事件、重置编排 |
 | `CreditExpiryHandling.swift` | 临期配置、15 分钟策略、账号与卡片去重记录、跨实例锁 |
 | `CreditExpiryRuntime.swift` | 普通启动与冒烟共用的通知回调、唤醒监听和轮询生命周期 |
@@ -86,3 +87,7 @@
 ## 版本探测
 
 `ReleaseUpdateChecker` 独立管理 GitHub 正式版查询、数字版本比较、跨重启的 24 小时检查间隔及限流退避。应用生命周期触发到期检查；检查不进入 `UsageMonitor` 的忙状态。状态栏右键菜单、浮层和独立窗口共用同一实例。仅手动检查显示结果对话框，浮层在更新动作前收起；自动检查只更新菜单。跳转链接由固定仓库与经过严格校验的版本号构造，不使用 API 返回的任意 URL。隔离启动使用注入的假版本服务，不访问 GitHub。
+
+## 趋势历史的恢复与调度
+
+趋势历史是可重新积累的派生数据，与不可丢弃的重置幂等记录使用不同恢复策略。解码失败时在原账号文件锁内保留最近一份 `.corrupt` 副本并重新采样；普通 I/O 错误继续报告失败，不删除源文件。独立串行队列执行锁等待与完整 JSON 读写，前台 `readAccountAndUsage()` 只调度工作。结果回到主线程后校验任务代次、账号键和采样时间，取消或迟到的任务可以完成磁盘操作，但不能恢复旧账号的界面历史。测试和预览可显式等待持久化完成，产品中的刷新、登录与重置不等待此队列。

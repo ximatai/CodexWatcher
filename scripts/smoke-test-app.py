@@ -55,4 +55,4 @@ done
         previews.mkdir(parents=True, exist_ok=True)
         for preview in root.glob('popover-cards-*.png'):
             shutil.copy2(preview, previews / preview.name)
-print('Packaged app startup, popover/menu lifecycle, wake, fake reminder and confirmation navigation passed; no writes.')
+print('Packaged app startup, quota trend mouse/keyboard switching, popover/menu lifecycle, wake, fake reminder and confirmation navigation passed; no writes.')

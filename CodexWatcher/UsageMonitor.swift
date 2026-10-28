@@ -8,6 +8,13 @@ enum MonitorNoticeKind {
 
 @MainActor @Observable
 final class UsageMonitor {
+    private(set) var trendHistory: [String: [UsageTrendSample]] = [:]
+    private(set) var trendStorageFailed = false
+    private(set) var trendStorageRecovered = false
+    @ObservationIgnored private var trendTask: Task<Void, Never>?
+    @ObservationIgnored private var trendGeneration = UUID()
+    @ObservationIgnored private let trendStore: UsageTrendStore
+
     private(set) var displayDate = Date()
 
     func updateClock() { displayDate = .now }
@@ -63,7 +70,7 @@ final class UsageMonitor {
     @ObservationIgnored private var loginTimeout: Task<Void, Never>?
 
     init(client suppliedClient: AppServerClient? = nil, defaults: UserDefaults = .standard,
-         expiryNow: @escaping () -> Date = Date.init) {
+         expiryNow: @escaping () -> Date = Date.init, trendStore suppliedTrendStore: UsageTrendStore? = nil) {
         self.defaults = defaults
         self.expiryNow = expiryNow
         expiryConfiguration = Self.readExpiryConfiguration(defaults)
@@ -71,6 +78,8 @@ final class UsageMonitor {
         let path = defaults.string(forKey: "codexExecutablePath")
             ?? AppServerClient.defaultExecutablePath
         client = suppliedClient ?? AppServerClient(executablePath: path)
+        trendStore = suppliedTrendStore ?? UsageTrendStore(directory: client.runtimeDirectory.deletingLastPathComponent()
+            .appendingPathComponent("State", isDirectory: true))
         executablePath = client.executablePath
         selectedWindowID = defaults.string(forKey: "selectedWindowID")
         resetStore = ResetAttemptStore(directory: client.runtimeDirectory.deletingLastPathComponent()
@@ -226,6 +235,7 @@ final class UsageMonitor {
     }
 
     func shutdown() {
+        invalidateTrendPersistence()
         expiryChecksStopped = true
         invalidateAutomaticHello()
         helloPollTask?.cancel()
@@ -251,6 +261,8 @@ final class UsageMonitor {
         let response: AccountResponse = try await client.request("account/read", params: ["refreshToken": false])
         if response.account?.email != account?.email || response.account == nil {
             if helloSession != nil { invalidateAutomaticHello() }
+            invalidateTrendPersistence()
+            trendHistory = [:]
             snapshot = nil
             lastUpdated = nil
             pendingRedemption = nil
@@ -259,6 +271,8 @@ final class UsageMonitor {
         }
         account = response.account
         guard account?.type == "chatgpt" else {
+            invalidateTrendPersistence()
+            trendHistory = [:]
             snapshot = nil
             lastUpdated = nil
             return
@@ -269,10 +283,47 @@ final class UsageMonitor {
         }
         snapshot = fresh
         lastUpdated = .now
+        if let owner = redemptionStorageKey, let date = lastUpdated {
+            scheduleTrendPersistence(owner: owner, windows: fresh.windows, date: date)
+        } else {
+            invalidateTrendPersistence()
+            trendHistory = [:]
+        }
         if let key = redemptionStorageKey {
             pendingRedemption = try resetStore.pending(for: key)
         } else { pendingRedemption = nil }
     }
+
+    private func invalidateTrendPersistence() {
+        trendGeneration = UUID()
+        trendTask?.cancel()
+        trendStorageRecovered = false
+    }
+
+    private func scheduleTrendPersistence(owner: String, windows: [UsageWindow], date: Date) {
+        invalidateTrendPersistence()
+        let generation = trendGeneration
+        let store = trendStore
+        trendTask = Task { @MainActor [weak self] in
+            guard !Task.isCancelled else { return }
+            do {
+                let result = try await store.recordInBackground(account: owner, windows: windows, at: date)
+                guard !Task.isCancelled, let self, self.trendGeneration == generation,
+                      self.redemptionStorageKey == owner, self.lastUpdated == date else { return }
+                self.trendHistory = result.history
+                self.trendStorageFailed = false
+                self.trendStorageRecovered = result.recoveredFromCorruption
+            } catch {
+                guard !Task.isCancelled, let self, self.trendGeneration == generation,
+                      self.redemptionStorageKey == owner, self.lastUpdated == date else { return }
+                self.trendHistory = [:]
+                self.trendStorageFailed = true
+            }
+        }
+    }
+
+    // Deterministic previews/tests may wait; foreground account work never waits for disk.
+    func waitForTrendPersistence() async { await trendTask?.value }
 
     func login() async {
         guard !isBusy, loginID == nil else { return }
@@ -326,6 +377,8 @@ final class UsageMonitor {
             try await client.connect()
             let _: EmptyResponse = try await client.request("account/logout")
             account = nil
+            invalidateTrendPersistence()
+            trendHistory = [:]
             snapshot = nil
             lastUpdated = nil
             pendingRedemption = nil
@@ -698,6 +751,7 @@ final class UsageMonitor {
     }
 
     private func beginAccountMutation() {
+        invalidateTrendPersistence()
         accountMutationDepth += 1
         invalidateAutomaticHello()
     }

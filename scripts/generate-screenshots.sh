@@ -26,4 +26,4 @@ done
 xcrun swiftc -parse-as-library -swift-version 5 \
   "${sources[@]}" "$project_root/scripts/DocumentationPreview.swift" \
   -o "$preview_app/Contents/MacOS/DocumentationPreview"
-"$preview_app/Contents/MacOS/DocumentationPreview" "$project_root/docs/images"
+"$preview_app/Contents/MacOS/DocumentationPreview" "${1:-$project_root/docs/images}"

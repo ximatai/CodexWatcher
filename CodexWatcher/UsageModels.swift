@@ -48,7 +48,7 @@ struct LimitBucket: Codable {
     let secondary: QuotaWindow?
 }
 
-struct QuotaWindow: Codable {
+struct QuotaWindow: Codable, Sendable {
     let usedPercent: Double
     let windowDurationMins: Double?
     let resetsAt: Double?
@@ -71,7 +71,7 @@ struct QuotaWindow: Codable {
     }
 }
 
-struct UsageWindow: Identifiable {
+struct UsageWindow: Identifiable, Sendable {
     let id: String
     let bucketID: String
     let name: String

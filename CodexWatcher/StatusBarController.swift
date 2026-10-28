@@ -317,6 +317,92 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
         return true
     }
 
+    /// Exercise real button hit testing and Space activation without an AX client.
+    func verifyUsagePresentationForSmokeTest() async -> Bool {
+        guard CommandLine.arguments.contains("--release-smoke-test") else { return false }
+        func fail(_ line: Int = #line) -> Bool {
+            FileHandle.standardError.write(Data("Usage presentation smoke failed at line \(line)\n".utf8))
+            return false
+        }
+        func waitFor(_ condition: () -> Bool) async -> Bool {
+            let deadline = Date().addingTimeInterval(4)
+            while !condition() && Date() < deadline {
+                try? await Task.sleep(for: .milliseconds(20))
+            }
+            return condition()
+        }
+        func find(_ name: String, in view: NSView) -> UsageInteractionProbe? {
+            if let probe = view as? UsageInteractionProbe, probe.identifier?.rawValue == name { return probe }
+            for child in view.subviews {
+                if let probe = find(name, in: child) { return probe }
+            }
+            return nil
+        }
+        func probe(_ name: String) -> UsageInteractionProbe? {
+            guard let view = popover.contentViewController?.view else { return nil }
+            view.layoutSubtreeIfNeeded()
+            return find(name, in: view)
+        }
+        func click(_ view: NSView) -> Bool {
+            guard let window = view.window else { return false }
+            let point = view.convert(NSPoint(x: view.bounds.midX, y: view.bounds.midY), to: nil)
+            for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+                guard let event = NSEvent.mouseEvent(with: type, location: point, modifierFlags: [],
+                    timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                    context: nil, eventNumber: 0, clickCount: 1, pressure: 1) else { return false }
+                NSApp.postEvent(event, atStart: false)
+            }
+            return true
+        }
+        func space() -> Bool {
+            guard let window = popover.contentViewController?.view.window else { return false }
+            for type in [NSEvent.EventType.keyDown, .keyUp] {
+                guard let event = NSEvent.keyEvent(with: type, location: .zero, modifierFlags: [],
+                    timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                    context: nil, characters: " ", charactersIgnoringModifiers: " ",
+                    isARepeat: false, keyCode: 49) else { return false }
+                NSApp.postEvent(event, atStart: false)
+            }
+            return true
+        }
+        let animated = popover.animates
+        popover.animates = false
+        defer { closePopover(); popover.animates = animated }
+        showPopover(clearInitialFocus: true)
+        guard await waitFor({ probe("quota-progress") != nil && !self.monitor.isBusy }),
+              let progress = probe("quota-progress"), click(progress),
+              await waitFor({ probe("quota-trend-return") != nil && probe("quota-progress") == nil }),
+              let back = probe("quota-trend-return"), !back.controlFocused, click(back),
+              await waitFor({ probe("quota-progress") != nil && probe("quota-trend-return") == nil }),
+              let restored = probe("quota-progress"), !restored.controlFocused, click(restored),
+              await waitFor({ probe("quota-trend-return") != nil }) else { return fail() }
+        closePopover()
+        showPopover(clearInitialFocus: true)
+        guard await waitFor({ probe("quota-progress") != nil && probe("quota-trend-return") == nil }),
+              let keyboardTarget = probe("quota-progress") else { return fail() }
+        keyboardTarget.requestControlFocus?()
+        guard await waitFor({ probe("quota-progress")?.controlFocused == true }) else { return fail() }
+        // SwiftUI focus bindings publish before AppKit installs the responder.
+        // Allow the short view transition to settle before posting a key event.
+        try? await Task.sleep(for: .milliseconds(200))
+        guard space(),
+              await waitFor({ probe("quota-trend-return")?.controlFocused == true && probe("quota-progress") == nil }) else {
+            FileHandle.standardError.write(Data("Keyboard forward: progress=\(probe("quota-progress") != nil), back=\(probe("quota-trend-return") != nil)\n".utf8))
+            return fail()
+        }
+        try? await Task.sleep(for: .milliseconds(200))
+        guard space(),
+              await waitFor({ probe("quota-progress")?.controlFocused == true && probe("quota-trend-return") == nil }) else {
+            FileHandle.standardError.write(Data("Keyboard back: progress=\(probe("quota-progress") != nil), back=\(probe("quota-trend-return") != nil)\n".utf8))
+            return fail()
+        }
+        closePopover()
+        showPopover(clearInitialFocus: true)
+        guard await waitFor({ probe("quota-progress")?.controlFocused == false && probe("quota-trend-return") == nil }) else { return fail() }
+        FileHandle.standardError.write(Data("Usage presentation: mouse switch/return, reopen reset and keyboard Space passed\n".utf8))
+        return true
+    }
+
     /// Runs only with the isolated CLI fixture. Opens the actual native gear control;
     /// cancellation selects no item. External interactions are injected into the same handlers.
     func verifyPopoverForSmokeTest() async -> Bool {

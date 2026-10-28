@@ -22,7 +22,7 @@ final class UsageMonitorTests: XCTestCase {
         let store: ResetAttemptStore
         let expiryClock = ExpiryClock()
 
-        init() throws {
+        init(trendQueue: DispatchQueue? = nil) throws {
             directory = FileManager.default.temporaryDirectory.appendingPathComponent("WatcherMonitor-\(UUID())")
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
@@ -101,7 +101,9 @@ final class UsageMonitorTests: XCTestCase {
             client = AppServerClient(executablePath: executable.path,
                                      runtimeDirectory: directory.appendingPathComponent("Runtime"),
                                      requestTimeout: .seconds(3))
-            monitor = UsageMonitor(client: client, defaults: defaults, expiryNow: { [expiryClock] in expiryClock.now() })
+            let trendDirectory = directory.appendingPathComponent("State")
+            monitor = UsageMonitor(client: client, defaults: defaults, expiryNow: { [expiryClock] in expiryClock.now() },
+                trendStore: trendQueue.map { UsageTrendStore(directory: trendDirectory, queue: $0) })
             store = ResetAttemptStore(directory: directory.appendingPathComponent("State"))
             try writeAccount("account-a")
             try writeUsage()
@@ -152,6 +154,7 @@ final class UsageMonitorTests: XCTestCase {
 
         func refresh() async throws {
             await monitor.refresh()
+            await monitor.waitForTrendPersistence()
             _ = try XCTUnwrap(monitor.snapshot, monitor.errorMessage ?? "Missing fixture snapshot")
         }
 
@@ -1058,6 +1061,116 @@ final class UsageMonitorTests: XCTestCase {
         XCTAssertEqual(fixture.monitor.menuTitle(), PresentationFormat().percent(42))
         XCTAssertFalse(fixture.monitor.isStale(at: .now))
         XCTAssertTrue(try fixture.consumeRequests().isEmpty)
+    }
+
+    func testTrendHistorySurvivesReadFailureAndDoesNotCrossAccounts() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try await fixture.refresh()
+        let original = fixture.monitor.trendHistory
+        XCTAssertEqual(original["codex.primary"]?.last?.remaining, 60)
+        try fixture.marker("reject-usage")
+        await fixture.monitor.refresh()
+        XCTAssertEqual(fixture.monitor.trendHistory, original)
+        try fixture.writeAccount("account-b")
+        await fixture.monitor.refresh()
+        XCTAssertTrue(fixture.monitor.trendHistory.isEmpty)
+        try FileManager.default.removeItem(at: fixture.directory.appendingPathComponent("reject-usage"))
+        try fixture.writeUsage(owner: "account-b", usedPercent: 75)
+        try await fixture.refresh()
+        XCTAssertEqual(fixture.monitor.trendHistory["codex.primary"]?.map(\.remaining), [25])
+        await fixture.monitor.logout()
+        XCTAssertTrue(fixture.monitor.trendHistory.isEmpty)
+        XCTAssertTrue(try fixture.consumeRequests().isEmpty)
+        XCTAssertTrue(try fixture.helloRequests().isEmpty)
+    }
+
+    func testBrokenTrendStorageDoesNotFailQuotaRefresh() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try await fixture.refresh()
+        let files = try FileManager.default.contentsOfDirectory(at: fixture.directory.appendingPathComponent("State"),
+                                                               includingPropertiesForKeys: nil)
+        let history = try XCTUnwrap(files.first { $0.lastPathComponent.hasPrefix("usage-trend-") && $0.pathExtension == "json" })
+        try Data("invalid".utf8).write(to: history)
+        try await fixture.refresh()
+        XCTAssertFalse(fixture.monitor.trendStorageFailed)
+        XCTAssertTrue(fixture.monitor.trendStorageRecovered)
+        XCTAssertEqual(fixture.monitor.trendHistory["codex.primary"]?.map(\.remaining), [60])
+        try await fixture.refresh()
+        XCTAssertFalse(fixture.monitor.trendStorageRecovered)
+        XCTAssertNil(fixture.monitor.errorMessage)
+        XCTAssertEqual(fixture.monitor.selectedWindow?.quota.usedPercent, 40)
+    }
+
+    func testBlockedTrendStorageDoesNotBlockRefreshOrLogoutAndCannotRestoreHistory() async throws {
+        let queue = DispatchQueue(label: "TrendBlockedLogout")
+        let fixture = try Fixture(trendQueue: queue)
+        defer { fixture.cleanup() }
+        queue.suspend()
+        await fixture.monitor.refresh()
+        XCTAssertFalse(fixture.monitor.isBusy)
+        XCTAssertNotNil(fixture.monitor.snapshot)
+        let oldWrite = Task { await fixture.monitor.waitForTrendPersistence() }
+        await Task.yield()
+        await fixture.monitor.logout()
+        XCTAssertNil(fixture.monitor.account)
+        queue.resume()
+        await oldWrite.value
+        XCTAssertTrue(fixture.monitor.trendHistory.isEmpty)
+        XCTAssertFalse(fixture.monitor.trendStorageFailed)
+    }
+
+    func testNewerTrendRefreshWinsAfterBlockedWrites() async throws {
+        let queue = DispatchQueue(label: "TrendBlockedRefresh")
+        let fixture = try Fixture(trendQueue: queue)
+        defer { fixture.cleanup() }
+        queue.suspend()
+        var resumed = false
+        defer { if !resumed { queue.resume() } }
+        await fixture.monitor.refresh()
+        await Task.yield()
+        try fixture.writeUsage(usedPercent: 75)
+        await fixture.monitor.refresh()
+        XCTAssertFalse(fixture.monitor.isBusy)
+        queue.resume()
+        resumed = true
+        await fixture.monitor.waitForTrendPersistence()
+        XCTAssertEqual(fixture.monitor.trendHistory["codex.primary"]?.last?.remaining, 25)
+    }
+
+    func testAccountSwitchRejectsLateTrendWrite() async throws {
+        let queue = DispatchQueue(label: "TrendBlockedAccount")
+        let fixture = try Fixture(trendQueue: queue)
+        defer { fixture.cleanup() }
+        queue.suspend()
+        var resumed = false
+        defer { if !resumed { queue.resume() } }
+        await fixture.monitor.refresh()
+        await Task.yield()
+        try fixture.writeAccount("account-b")
+        try fixture.writeUsage(owner: "account-b", usedPercent: 80)
+        await fixture.monitor.refresh()
+        XCTAssertTrue(fixture.monitor.trendHistory.isEmpty)
+        queue.resume()
+        resumed = true
+        await fixture.monitor.waitForTrendPersistence()
+        XCTAssertEqual(fixture.monitor.account?.email, "account-b@example.invalid")
+        XCTAssertEqual(fixture.monitor.trendHistory["codex.primary"]?.map(\.remaining), [20])
+    }
+
+    func testShutdownRejectsLateTrendWrite() async throws {
+        let queue = DispatchQueue(label: "TrendBlockedShutdown")
+        let fixture = try Fixture(trendQueue: queue)
+        defer { fixture.cleanup() }
+        queue.suspend()
+        await fixture.monitor.refresh()
+        let oldWrite = Task { await fixture.monitor.waitForTrendPersistence() }
+        await Task.yield()
+        fixture.monitor.shutdown()
+        queue.resume()
+        await oldWrite.value
+        XCTAssertTrue(fixture.monitor.trendHistory.isEmpty)
     }
 
     func testLoggedOutAndChangedAccountClearPreviousUsageAndPendingOperation() async throws {

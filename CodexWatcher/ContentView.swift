@@ -15,10 +15,13 @@ struct ContentView: View {
     var presentReset: ((ResetConfirmation) -> Void)?
     var flexibleSize = false
     var maximumHeight: CGFloat = 660
+    var initiallyShowingTrend = false
+    var initiallyHoveringProgress = false
+    private let presentationID = UUID()
     @AppStorage("appearance") private var appearance = AppAppearance.system.rawValue
 
     var body: some View {
-        DashboardContent(monitor: monitor, updates: updates, dismissForUpdate: dismissForUpdate, appearance: $appearance, handlesExpiryReminders: handlesExpiryReminders, openDashboard: openDashboard, presentSettings: presentSettings, presentReset: presentReset, flexibleSize: flexibleSize, maximumHeight: maximumHeight)
+        DashboardContent(monitor: monitor, updates: updates, dismissForUpdate: dismissForUpdate, appearance: $appearance, handlesExpiryReminders: handlesExpiryReminders, openDashboard: openDashboard, presentSettings: presentSettings, presentReset: presentReset, flexibleSize: flexibleSize, maximumHeight: maximumHeight, presentationID: presentationID, showingUsageTrend: initiallyShowingTrend, hoveringProgress: initiallyHoveringProgress)
             .onAppear { applyAppearance() }
             .onChange(of: appearance) { _, _ in applyAppearance() }
     }
@@ -43,6 +46,13 @@ private struct DashboardContent: View {
     let presentReset: ((ResetConfirmation) -> Void)?
     let flexibleSize: Bool
     let maximumHeight: CGFloat
+    let presentationID: UUID
+    @State var showingUsageTrend = false
+    @State var hoveringProgress = false
+    @State private var hoveringReturnProgress = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @FocusState private var usageControlFocused: Bool
+    @State private var usageFocusGeneration = UUID()
     @State private var contentHeights: [DashboardRegion: CGFloat] = [:]
     @State private var resetConfirmation: ResetConfirmation?
     @State private var showingMenuBarSettings = false
@@ -100,6 +110,13 @@ private struct DashboardContent: View {
             .background(palette.background)
             .foregroundStyle(.primary)
             .tint(palette.accent)
+        }
+        .onChange(of: presentationID) { _, _ in
+            showingUsageTrend = false
+            hoveringProgress = false
+            hoveringReturnProgress = false
+            usageControlFocused = false
+            usageFocusGeneration = UUID()
         }
         .onPreferenceChange(DashboardHeightPreference.self) { heights in
             if !flexibleSize { contentHeights = heights }
@@ -246,9 +263,12 @@ private struct DashboardContent: View {
                                 VStack(alignment: .leading, spacing: 5) {
                                     Text(windowTitle(item)).font(.system(size: 11, weight: .medium))
                                         .lineLimit(2).multilineTextAlignment(.leading)
-                                    Text(format.percent(item.quota.usedPercent))
-                                        .font(.system(size: 18, weight: .semibold)).monospacedDigit()
+                                    if !selected {
+                                        Text(format.percent(item.quota.usedPercent))
+                                            .font(.system(size: 18, weight: .semibold)).monospacedDigit()
+                                    }
                                 }
+                                .frame(minHeight: 40, alignment: .leading)
                                 Spacer(minLength: 0)
                                 if selected {
                                     Image(systemName: "checkmark").font(.caption.weight(.semibold))
@@ -282,39 +302,95 @@ private struct DashboardContent: View {
                 Text("剩余 \(format.percent(max(0, 100 - window.quota.usedPercent)))")
                     .font(.callout.weight(.medium)).foregroundStyle(.secondary)
             }
-            GeometryReader { geometry in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(palette.track).frame(height: 7)
-                    Capsule().fill(palette.accent)
-                        .frame(width: geometry.size.width * min(100, max(0, window.quota.usedPercent)) / 100, height: 7)
-                    if let standard {
-                        Capsule().fill(Color.primary.opacity(0.8)).frame(width: 2, height: 15)
-                            .offset(x: min(geometry.size.width - 2, geometry.size.width * standard / 100))
+            if showingUsageTrend {
+                UsageTrendView(samples: monitor.trendHistory[window.id] ?? [], quota: window.quota,
+                               date: date, stale: stale, storageFailed: monitor.trendStorageFailed,
+                               recoveredHistory: monitor.trendStorageRecovered, headerAction: AnyView(
+                    Button {
+                        changeUsagePresentation(false)
+                    } label: {
+                        Label("返回进度", systemImage: "arrow.left")
+                            .font(.system(size: 11, weight: .medium))
+                            .padding(.horizontal, 6).padding(.vertical, 5)
+                            .background(hoveringReturnProgress ? palette.selectedSurface : .clear,
+                                        in: RoundedRectangle(cornerRadius: 8))
+                            .overlay(RoundedRectangle(cornerRadius: 8)
+                                .strokeBorder(usageControlFocused ? palette.accent.opacity(0.3) : .clear, lineWidth: 0.75))
+                            .contentShape(Rectangle())
                     }
-                }.frame(height: 16)
-            }
-            .frame(height: 16)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("额度进度")
-            .accessibilityValue("已用 \(format.percent(window.quota.usedPercent))；参考进度 \(standard.map { format.percent($0) } ?? "未知")；较参考进度 \(deviation.map { format.deviation($0) } ?? "待更新")")
-            .help("刻度为参考进度，按额度周期的自然时间计算。")
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 5) {
-                    Text("参考进度").font(.caption).foregroundStyle(.secondary)
-                        .help("按额度周期的自然时间计算，包含睡眠和休息时间。")
-                    Text(standard.map { format.percent($0, decimals: 1) } ?? "—")
-                        .font(.system(size: 20, weight: .semibold)).monospacedDigit()
+                    .buttonStyle(.plain)
+                    .foregroundStyle(palette.accent)
+                    .focused($usageControlFocused)
+                    .focusEffectDisabled()
+                    .onHover { hoveringReturnProgress = $0 }
+                    .background {
+                        if CommandLine.arguments.contains("--release-smoke-test") {
+                            UsageInteractionAnchor(name: "quota-trend-return", focused: usageControlFocused,
+                                                   requestFocus: { usageControlFocused = true })
+                        }
+                    }
+                ))
+                .transition(.opacity)
+            } else {
+                Button {
+                    changeUsagePresentation(true)
+                } label: {
+                    HStack(spacing: 10) {
+                        GeometryReader { geometry in
+                            ZStack(alignment: .leading) {
+                                Capsule().fill(palette.track).frame(height: 7)
+                                Capsule().fill(palette.accent)
+                                    .frame(width: geometry.size.width * min(100, max(0, window.quota.usedPercent)) / 100, height: 7)
+                                if let standard {
+                                    Capsule().fill(Color.primary.opacity(0.8)).frame(width: 2, height: 15)
+                                        .offset(x: min(geometry.size.width - 2, geometry.size.width * standard / 100))
+                                }
+                            }
+                            .frame(width: geometry.size.width, height: geometry.size.height)
+                        }
+                        .frame(height: 24)
+                    }
+                    .padding(.horizontal, 8).padding(.vertical, 6)
+                    .background(hoveringProgress ? palette.selectedSurface : .clear,
+                                in: RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(usageControlFocused ? palette.accent.opacity(0.3) : .clear, lineWidth: 0.75))
+                    .contentShape(Rectangle())
                 }
-                Spacer()
-                VStack(alignment: .trailing, spacing: 5) {
-                    Text(deviation.map { $0 >= 0 ? "消耗超前" : "消耗滞后" } ?? "较参考进度")
-                        .font(.caption).foregroundStyle(.secondary)
-                    Text(deviation.map { format.deviation(abs($0), signed: false) } ?? "待更新")
-                        .font(.system(size: 16, weight: .semibold)).monospacedDigit()
-                        .foregroundStyle(palette.deviationColor(deviation))
+                .buttonStyle(.plain)
+                .focused($usageControlFocused)
+                .focusEffectDisabled()
+                .onHover { hoveringProgress = $0 }
+                .background {
+                    if CommandLine.arguments.contains("--release-smoke-test") {
+                        UsageInteractionAnchor(name: "quota-progress", focused: usageControlFocused,
+                                               requestFocus: { usageControlFocused = true })
+                    }
                 }
+                .help("点击查看趋势；刻度为参考进度，按额度周期的自然时间计算。")
+                .accessibilityLabel("查看额度趋势")
+                .accessibilityValue("已用 \(format.percent(window.quota.usedPercent))；参考进度 \(standard.map { format.percent($0) } ?? "未知")；较参考进度 \(deviation.map { format.deviation($0) } ?? "待更新")")
+                .accessibilityHint("切换到剩余额度趋势面板")
+                // Expand the hit area outward; keep the track aligned with the content edges.
+                .padding(.horizontal, -8)
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("参考进度").font(.caption).foregroundStyle(.secondary)
+                            .help("按额度周期的自然时间计算，包含睡眠和休息时间。")
+                        Text(standard.map { format.percent($0, decimals: 1) } ?? "—")
+                            .font(.system(size: 20, weight: .semibold)).monospacedDigit()
+                    }
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 5) {
+                        Text(deviation.map { $0 >= 0 ? "消耗超前" : "消耗滞后" } ?? "较参考进度")
+                            .font(.caption).foregroundStyle(.secondary)
+                        Text(deviation.map { format.deviation(abs($0), signed: false) } ?? "待更新")
+                            .font(.system(size: 16, weight: .semibold)).monospacedDigit()
+                            .foregroundStyle(palette.deviationColor(deviation))
+                    }
+                }
+                .help("实际用量减去参考进度，单位为百分点。")
             }
-            .help("实际用量减去参考进度，单位为百分点。")
             if let reset = window.quota.resetDate {
                 HStack(alignment: .firstTextBaseline) {
                     Label(reset > date ? "\(format.duration(reset.timeIntervalSince(date)))后重置" : "等待重置更新",
@@ -330,6 +406,30 @@ private struct DashboardContent: View {
                     Spacer()
                     Button("刷新") { Task { await monitor.refresh() } }.disabled(monitor.isBusy)
                 }.font(.caption)
+            }
+        }
+    }
+
+    private func changeUsagePresentation(_ trend: Bool) {
+        let pointerEvents: Set<NSEvent.EventType> = [.leftMouseDown, .leftMouseUp, .rightMouseDown,
+                                                    .rightMouseUp, .otherMouseDown, .otherMouseUp]
+        let pointerActivation = NSApp.currentEvent.map { pointerEvents.contains($0.type) } ?? false
+        let restoreKeyboardFocus = usageControlFocused && !pointerActivation
+        usageControlFocused = false
+        hoveringProgress = false
+        hoveringReturnProgress = false
+        let focusGeneration = UUID()
+        usageFocusGeneration = focusGeneration
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.16), completionCriteria: .removed) {
+            showingUsageTrend = trend
+        } completion: {
+            // Restoring during the outgoing view's animation can leave the binding
+            // focused while AppKit has already discarded its actual responder.
+            guard restoreKeyboardFocus else { return }
+            Task { @MainActor in
+                await Task.yield()
+                guard usageFocusGeneration == focusGeneration, showingUsageTrend == trend else { return }
+                usageControlFocused = true
             }
         }
     }
@@ -628,4 +728,24 @@ private extension View {
             Color.clear.preference(key: DashboardHeightPreference.self, value: [region: geometry.size.height])
         })
     }
+}
+
+// In-process geometry/focus probes for the isolated release fixture. Events still
+// travel through the real SwiftUI buttons; the probes never intercept hit testing.
+struct UsageInteractionAnchor: NSViewRepresentable {
+    let name: String
+    let focused: Bool
+    let requestFocus: () -> Void
+    func makeNSView(context: Context) -> UsageInteractionProbe { UsageInteractionProbe() }
+    func updateNSView(_ view: UsageInteractionProbe, context: Context) {
+        view.identifier = NSUserInterfaceItemIdentifier(name)
+        view.controlFocused = focused
+        view.requestControlFocus = requestFocus
+    }
+}
+
+final class UsageInteractionProbe: NSView {
+    var controlFocused = false
+    var requestControlFocus: (() -> Void)?
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
