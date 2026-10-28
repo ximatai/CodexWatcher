@@ -34,7 +34,7 @@ struct ResetConfirmationContent: View {
             VStack(alignment: .leading, spacing: 12) {
                 Text(cardTitle).font(.system(size: 12, weight: .semibold))
                 Divider()
-                detail("账号", account)
+                detail(String(localized: "账号"), account)
                 VStack(alignment: .leading, spacing: 5) {
                     detail(quotaTitle, usage)
                     if let updated {
@@ -42,7 +42,7 @@ struct ResetConfirmationContent: View {
                             .frame(maxWidth: .infinity, alignment: .trailing)
                     }
                 }
-                detail("卡片到期", expiry)
+                detail(String(localized: "卡片到期"), expiry)
             }
             .padding(14)
             .background(palette.surface, in: RoundedRectangle(cornerRadius: 12))

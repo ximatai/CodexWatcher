@@ -392,9 +392,9 @@ private struct DashboardContent: View {
                     }
                     Spacer()
                     VStack(alignment: .trailing, spacing: 5) {
-                        Text(deviation.map { $0 >= 0 ? "消耗超前" : "消耗滞后" } ?? "较参考进度")
+                        Text(deviation.map { $0 >= 0 ? String(localized: "消耗超前") : String(localized: "消耗滞后") } ?? String(localized: "较参考进度"))
                             .font(.caption).foregroundStyle(.secondary)
-                        Text(deviation.map { format.deviation(abs($0), signed: false) } ?? "待更新")
+                        Text(deviation.map { format.deviation(abs($0), signed: false) } ?? String(localized: "待更新"))
                             .font(.system(size: 16, weight: .semibold)).monospacedDigit()
                             .foregroundStyle(palette.deviationColor(deviation))
                     }
@@ -403,7 +403,7 @@ private struct DashboardContent: View {
             }
             if let reset = window.quota.resetDate {
                 HStack(alignment: .firstTextBaseline) {
-                    Label(reset > date ? "\(format.duration(reset.timeIntervalSince(date)))后重置" : "等待重置更新",
+                    Label(reset > date ? String(format: String(localized: "%@后重置"), format.duration(reset.timeIntervalSince(date))) : String(localized: "等待重置更新"),
                           systemImage: "arrow.clockwise")
                         .font(.system(size: 12, weight: .medium))
                     Spacer(minLength: 8)
@@ -454,7 +454,7 @@ private struct DashboardContent: View {
                 }
                 .buttonStyle(.plain).foregroundStyle(.secondary)
                 .help(monitor.expiryStatusTitle).accessibilityLabel("重置卡临期处理，\(monitor.expiryStatusTitle)")
-                Text(monitor.snapshot?.rateLimitResetCredits.map { "\(format.number(Double($0.availableCount))) 张可用" } ?? "信息未提供")
+                Text(monitor.snapshot?.rateLimitResetCredits.map { String(format: String(localized: "%@ 张可用"), format.number(Double($0.availableCount))) } ?? String(localized: "信息未提供"))
                     .font(.caption).foregroundStyle(.secondary)
             }
             if monitor.expiryConfiguration.mode != .off {
@@ -518,7 +518,7 @@ private struct DashboardContent: View {
                     }
                 }
                 if let expiry = credit.expiryDate {
-                    Text(expiry > date ? "\(format.compactDate(expiry)) 到期" : "已到期，等待刷新")
+                    Text(expiry > date ? String(format: String(localized: "%@ 到期"), format.compactDate(expiry)) : String(localized: "已到期，等待刷新"))
                         .foregroundStyle(.secondary)
                         .help(format.date(expiry, precise: true))
                 } else { Text("有效期未提供").foregroundStyle(.secondary) }
@@ -528,9 +528,9 @@ private struct DashboardContent: View {
                 .buttonStyle(.bordered).controlSize(.small).tint(.secondary)
                 .modifier(ControlHoverFeedback(color: palette.accent))
                 .disabled(monitor.redemptionBlockingReason(for: credit, at: date) != nil)
-                .help(monitor.redemptionBlockingReason(for: credit, at: date) ?? "查看并确认使用")
+                .help(monitor.redemptionBlockingReason(for: credit, at: date) ?? String(localized: "查看并确认使用"))
                 .accessibilityLabel("使用\(format.creditTitle(credit.title))")
-                .accessibilityHint(monitor.redemptionBlockingReason(for: credit, at: date) ?? "打开确认页")
+                .accessibilityHint(monitor.redemptionBlockingReason(for: credit, at: date) ?? String(localized: "打开确认页"))
         }
         .padding(.horizontal, 12).padding(.vertical, 10)
     }
@@ -599,11 +599,11 @@ private struct DashboardContent: View {
                     if let updated = monitor.lastUpdated {
                         Text("更新于 \(format.date(updated, timeOnly: Calendar.autoupdatingCurrent.isDateInToday(updated)))")
                     } else {
-                        Text(monitor.isBusy ? "正在连接…" : "尚未连接")
+                        Text(monitor.isBusy ? String(localized: "正在连接…") : String(localized: "尚未连接"))
                     }
                 }
                 .font(.system(size: 11)).foregroundStyle(.secondary)
-                .help(monitor.expiryConfiguration.mode == .off && !monitor.automaticHelloConfiguration.enabled ? "每 5 分钟刷新" : "自动处理每 30 秒检查并刷新")
+                .help(monitor.expiryConfiguration.mode == .off && !monitor.automaticHelloConfiguration.enabled ? String(localized: "每 5 分钟刷新") : String(localized: "自动处理每 30 秒检查并刷新"))
                 Spacer(minLength: 0)
                 Menu {
                     Button("状态栏显示…") { showSettings(.menuBar) }
@@ -635,7 +635,7 @@ private struct DashboardContent: View {
                         if updates.availableVersion != nil {
                             Button(updates.menuTitle) { dismissForUpdate(); updates.openAvailableRelease() }
                         }
-                        Button(updates.isChecking ? "正在检查更新…" : "检查更新…") {
+                        Button(updates.isChecking ? String(localized: "正在检查更新…") : String(localized: "检查更新…")) {
                             dismissForUpdate()
                             Task { await updates.checkInteractively() }
                         }
