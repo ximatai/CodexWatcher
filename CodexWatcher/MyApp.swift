@@ -104,6 +104,7 @@ final class WatcherAppDelegate: NSObject, NSApplicationDelegate {
               notifications.delivered.isEmpty else { finishReleaseSmokeTest(); return }
         for appearance in [AppAppearance.light, .dark, .system] { appearance.apply(to: NSApp) }
         guard await statusController?.verifyPopoverSizingForSmokeTest(root: root) == true,
+              await statusController?.verifyUsagePresentationForSmokeTest() == true,
               await statusController?.verifyPopoverForSmokeTest() == true else {
             finishReleaseSmokeTest(); return
         }
@@ -172,6 +173,11 @@ final class WatcherAppDelegate: NSObject, NSApplicationDelegate {
             window.isReleasedWhenClosed = false
             window.center()
             dashboard = window
+        }
+        if let dashboard, !dashboard.isVisible,
+           let hosting = dashboard.contentViewController as? NSHostingController<ContentView> {
+            hosting.rootView = ContentView(monitor: monitor, updates: updates,
+                handlesExpiryReminders: true, openDashboard: { [weak self] in self?.showDashboard() }, flexibleSize: true)
         }
         NSApplication.shared.activate(ignoringOtherApps: true)
         dashboard?.makeKeyAndOrderFront(nil)

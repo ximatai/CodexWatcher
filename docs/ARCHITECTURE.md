@@ -12,6 +12,7 @@
 | `LoginItemController.swift` | 通过 SMAppService 管理登录项，展示系统状态及待批准状态 |
 | `MenuBarLabelRenderer.swift` | 将图标与用量合成模板图，按 1x / 2x 可见像素对齐 |
 | `MenuBarConfiguration.swift` / `MenuBarSettingsView.swift` | 图标和文本组合规则、配置与预览 |
+| `UsageTrend.swift` / `UsageTrendView.swift` | 分账号的本地采样、连续分段、近期线性回归及 Swift Charts 剩余额度图表 |
 | `UsageMonitor.swift` | 主线程状态、默认 5 分钟轮询、临期 30 秒检查、登录事件、重置编排 |
 | `CreditExpiryHandling.swift` | 临期配置、15 分钟策略、账号与卡片去重记录、跨实例锁 |
 | `CreditExpiryRuntime.swift` | 普通启动与冒烟共用的通知回调、唤醒监听和轮询生命周期 |

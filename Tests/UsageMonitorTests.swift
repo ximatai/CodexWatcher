@@ -1060,6 +1060,43 @@ final class UsageMonitorTests: XCTestCase {
         XCTAssertTrue(try fixture.consumeRequests().isEmpty)
     }
 
+    func testTrendHistorySurvivesReadFailureAndDoesNotCrossAccounts() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try await fixture.refresh()
+        let original = fixture.monitor.trendHistory
+        XCTAssertEqual(original["codex.primary"]?.last?.remaining, 60)
+        try fixture.marker("reject-usage")
+        await fixture.monitor.refresh()
+        XCTAssertEqual(fixture.monitor.trendHistory, original)
+        try fixture.writeAccount("account-b")
+        await fixture.monitor.refresh()
+        XCTAssertTrue(fixture.monitor.trendHistory.isEmpty)
+        try FileManager.default.removeItem(at: fixture.directory.appendingPathComponent("reject-usage"))
+        try fixture.writeUsage(owner: "account-b", usedPercent: 75)
+        try await fixture.refresh()
+        XCTAssertEqual(fixture.monitor.trendHistory["codex.primary"]?.map(\.remaining), [25])
+        await fixture.monitor.logout()
+        XCTAssertTrue(fixture.monitor.trendHistory.isEmpty)
+        XCTAssertTrue(try fixture.consumeRequests().isEmpty)
+        XCTAssertTrue(try fixture.helloRequests().isEmpty)
+    }
+
+    func testBrokenTrendStorageDoesNotFailQuotaRefresh() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try await fixture.refresh()
+        let files = try FileManager.default.contentsOfDirectory(at: fixture.directory.appendingPathComponent("State"),
+                                                               includingPropertiesForKeys: nil)
+        let history = try XCTUnwrap(files.first { $0.lastPathComponent.hasPrefix("usage-trend-") && $0.pathExtension == "json" })
+        try Data("invalid".utf8).write(to: history)
+        try await fixture.refresh()
+        XCTAssertTrue(fixture.monitor.trendStorageFailed)
+        XCTAssertTrue(fixture.monitor.trendHistory.isEmpty)
+        XCTAssertNil(fixture.monitor.errorMessage)
+        XCTAssertEqual(fixture.monitor.selectedWindow?.quota.usedPercent, 40)
+    }
+
     func testLoggedOutAndChangedAccountClearPreviousUsageAndPendingOperation() async throws {
         let fixture = try Fixture()
         defer { fixture.cleanup() }

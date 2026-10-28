@@ -69,6 +69,14 @@ struct DocumentationPreview {
                                      runtimeDirectory: temporary.appendingPathComponent("Runtime"))
         let monitor = UsageMonitor(client: client, defaults: defaults)
         defer { monitor.shutdown() }
+        let trendStore = UsageTrendStore(directory: temporary.appendingPathComponent("State"))
+        for minute in stride(from: -60, through: -5, by: 5) {
+            let used = 84 + Double(minute) * 0.6 + (minute % 10 == 0 ? 0 : 1)
+            let demoWindow = UsageWindow(id: "codex.primary", bucketID: "codex", name: "Codex",
+                quota: QuotaWindow(usedPercent: used, windowDurationMins: 300, resetsAt: shortQuota.resetsAt))
+            _ = try trendStore.record(account: "documentation-demo", windows: [demoWindow],
+                                      at: Date(timeIntervalSince1970: now + Double(minute * 60)))
+        }
         await monitor.refresh()
         guard monitor.account?.email == "demo@example.com", monitor.snapshot != nil else {
             fatalError("Demo fixture failed to load")
@@ -78,6 +86,19 @@ struct DocumentationPreview {
             try await render(ContentView(monitor: monitor).defaultAppStorage(defaults),
                              size: NSSize(width: 390, height: 660), dark: dark,
                              to: output.appendingPathComponent(dark ? "dashboard-dark.png" : "dashboard-light.png"))
+        }
+        for dark in [false, true] {
+            try await render(UsageTrendView(samples: monitor.trendHistory["codex.primary"] ?? [],
+                quota: shortQuota, date: Date(), stale: false, storageFailed: false).padding(16),
+                size: NSSize(width: 390, height: 330), dark: dark,
+                to: output.appendingPathComponent(dark ? "usage-trend-dark.png" : "usage-trend-light.png"))
+        }
+        monitor.selectedWindowID = "codex.primary"
+        for dark in [false, true] {
+            defaults.set(dark ? "dark" : "light", forKey: "appearance")
+            try await render(ContentView(monitor: monitor, flexibleSize: true, initiallyShowingTrend: true).defaultAppStorage(defaults),
+                size: NSSize(width: 390, height: 850), dark: dark,
+                to: output.appendingPathComponent(dark ? "dashboard-trend-full-dark.png" : "dashboard-trend-full-light.png"))
         }
         let shortOnly = UsageSnapshot(accountId: "documentation-demo",
             rateLimits: LimitBucket(limitId: "codex", limitName: "Codex", planType: "pro", primary: shortQuota, secondary: nil),
@@ -142,7 +163,7 @@ struct DocumentationPreview {
         try await render(ContentView(monitor: monitor).defaultAppStorage(defaults),
                          size: NSSize(width: 390, height: 440), dark: false,
                          to: output.appendingPathComponent("welcome.png"))
-        print("Exported thirteen previews with fictional data; no real account, model call, notification permission or reset was used.")
+        print("Exported previews with fictional data; no real account, model call, notification permission or reset was used.")
     }
 
     @MainActor static func render<V: View>(_ view: V, size: NSSize, dark: Bool, to url: URL) async throws {

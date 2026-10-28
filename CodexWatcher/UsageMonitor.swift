@@ -8,6 +8,10 @@ enum MonitorNoticeKind {
 
 @MainActor @Observable
 final class UsageMonitor {
+    private(set) var trendHistory: [String: [UsageTrendSample]] = [:]
+    private(set) var trendStorageFailed = false
+    @ObservationIgnored private let trendStore: UsageTrendStore
+
     private(set) var displayDate = Date()
 
     func updateClock() { displayDate = .now }
@@ -71,6 +75,8 @@ final class UsageMonitor {
         let path = defaults.string(forKey: "codexExecutablePath")
             ?? AppServerClient.defaultExecutablePath
         client = suppliedClient ?? AppServerClient(executablePath: path)
+        trendStore = UsageTrendStore(directory: client.runtimeDirectory.deletingLastPathComponent()
+            .appendingPathComponent("State", isDirectory: true))
         executablePath = client.executablePath
         selectedWindowID = defaults.string(forKey: "selectedWindowID")
         resetStore = ResetAttemptStore(directory: client.runtimeDirectory.deletingLastPathComponent()
@@ -251,6 +257,7 @@ final class UsageMonitor {
         let response: AccountResponse = try await client.request("account/read", params: ["refreshToken": false])
         if response.account?.email != account?.email || response.account == nil {
             if helloSession != nil { invalidateAutomaticHello() }
+            trendHistory = [:]
             snapshot = nil
             lastUpdated = nil
             pendingRedemption = nil
@@ -259,6 +266,7 @@ final class UsageMonitor {
         }
         account = response.account
         guard account?.type == "chatgpt" else {
+            trendHistory = [:]
             snapshot = nil
             lastUpdated = nil
             return
@@ -269,6 +277,15 @@ final class UsageMonitor {
         }
         snapshot = fresh
         lastUpdated = .now
+        if let owner = redemptionStorageKey {
+            do {
+                trendHistory = try trendStore.record(account: owner, windows: fresh.windows, at: lastUpdated!)
+                trendStorageFailed = false
+            } catch {
+                trendHistory = [:]
+                trendStorageFailed = true
+            }
+        } else { trendHistory = [:] }
         if let key = redemptionStorageKey {
             pendingRedemption = try resetStore.pending(for: key)
         } else { pendingRedemption = nil }
@@ -326,6 +343,7 @@ final class UsageMonitor {
             try await client.connect()
             let _: EmptyResponse = try await client.request("account/logout")
             account = nil
+            trendHistory = [:]
             snapshot = nil
             lastUpdated = nil
             pendingRedemption = nil

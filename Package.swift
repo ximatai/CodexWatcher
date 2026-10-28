@@ -7,8 +7,8 @@ let package = Package(
     platforms: [.macOS(.v14)],
     targets: [
         .target(name: "WatcherCore", path: "CodexWatcher",
-                exclude: ["MyApp.swift", "ContentView.swift", "PrivacyMask.swift", "MenuBarSettingsView.swift", "ResetConfirmationView.swift", "ResetConfirmationContent.swift", "StatusBarController.swift", "CreditExpirySettingsView.swift", "CreditExpiryNotifications.swift", "AutomaticHelloSettingsView.swift", "ReleaseUpdateUI.swift", "Assets.xcassets"],
-                sources: ["UsageModels.swift", "UsageMonitor.swift", "AppServerClient.swift", "ResetAttemptStore.swift", "PresentationFormat.swift", "MenuBarLabelRenderer.swift", "MenuBarConfiguration.swift", "AppTheme.swift", "LoginItemController.swift", "CreditExpiryHandling.swift", "CreditExpiryRuntime.swift", "PopoverDismissalState.swift", "AutomaticHello.swift", "AutomaticHelloSession.swift", "ReleaseUpdateChecker.swift"],
+                exclude: ["UsageTrendView.swift", "MyApp.swift", "ContentView.swift", "PrivacyMask.swift", "MenuBarSettingsView.swift", "ResetConfirmationView.swift", "ResetConfirmationContent.swift", "StatusBarController.swift", "CreditExpirySettingsView.swift", "CreditExpiryNotifications.swift", "AutomaticHelloSettingsView.swift", "ReleaseUpdateUI.swift", "Assets.xcassets"],
+                sources: ["UsageTrend.swift", "UsageModels.swift", "UsageMonitor.swift", "AppServerClient.swift", "ResetAttemptStore.swift", "PresentationFormat.swift", "MenuBarLabelRenderer.swift", "MenuBarConfiguration.swift", "AppTheme.swift", "LoginItemController.swift", "CreditExpiryHandling.swift", "CreditExpiryRuntime.swift", "PopoverDismissalState.swift", "AutomaticHello.swift", "AutomaticHelloSession.swift", "ReleaseUpdateChecker.swift"],
                 resources: [.process("en.lproj"), .process("zh-Hans.lproj")]),
         .testTarget(name: "WatcherCoreTests", dependencies: ["WatcherCore"], path: "Tests")
     ],

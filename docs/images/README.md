@@ -8,6 +8,10 @@
 | --- | --- |
 | [dashboard-light.png](dashboard-light.png) | 亮色面板 |
 | [dashboard-dark.png](dashboard-dark.png) | 暗色面板 |
+| [dashboard-trend-full-light.png](dashboard-trend-full-light.png) | 点击进度区域切换后的趋势视图与重置卡（亮色，拉高窗口展示） |
+| [dashboard-trend-full-dark.png](dashboard-trend-full-dark.png) | 切换后的趋势视图（暗色，拉高窗口展示） |
+| [usage-trend-light.png](usage-trend-light.png) | 剩余额度历史、走势范围与预测耗尽时间（亮色） |
+| [usage-trend-dark.png](usage-trend-dark.png) | 剩余额度历史与预测（暗色） |
 | [dashboard-pro-short-only.png](dashboard-pro-short-only.png) | Pro 仅返回短周期额度，不显示 7 天窗口 |
 | [menu-bar-settings.png](menu-bar-settings.png) | 状态栏设置与数值预览 |
 | [reset-confirmation.png](reset-confirmation.png) | 重置确认页 |
@@ -27,6 +31,8 @@
 ```sh
 bash scripts/generate-screenshots.sh
 ```
+
+可传入输出目录以生成临时预览：`bash scripts/generate-screenshots.sh /tmp/WatcherPreview`。
 
 需要 Xcode 工具链，不需要 Codex CLI 或账号。脚本编译独立文档预览程序，使用临时 Runtime 和独立偏好；假服务仅响应初始化及读取，拒绝其他方法。确认页按钮为空操作；临期配置仅操作演示偏好，通知权限由假回调提供，不发送系统通知、不启动定时检查。退出后清理临时程序、数据和偏好，不影响正式应用。
 
