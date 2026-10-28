@@ -381,10 +381,21 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
         guard await waitFor({ probe("quota-progress") != nil && probe("quota-trend-return") == nil }),
               let keyboardTarget = probe("quota-progress") else { return fail() }
         keyboardTarget.requestControlFocus?()
-        guard await waitFor({ probe("quota-progress")?.controlFocused == true }), space(),
-              await waitFor({ probe("quota-trend-return")?.controlFocused == true && probe("quota-progress") == nil }),
-              space(),
-              await waitFor({ probe("quota-progress")?.controlFocused == true && probe("quota-trend-return") == nil }) else { return fail() }
+        guard await waitFor({ probe("quota-progress")?.controlFocused == true }) else { return fail() }
+        // SwiftUI focus bindings publish before AppKit installs the responder.
+        // Allow the short view transition to settle before posting a key event.
+        try? await Task.sleep(for: .milliseconds(200))
+        guard space(),
+              await waitFor({ probe("quota-trend-return")?.controlFocused == true && probe("quota-progress") == nil }) else {
+            FileHandle.standardError.write(Data("Keyboard forward: progress=\(probe("quota-progress") != nil), back=\(probe("quota-trend-return") != nil)\n".utf8))
+            return fail()
+        }
+        try? await Task.sleep(for: .milliseconds(200))
+        guard space(),
+              await waitFor({ probe("quota-progress")?.controlFocused == true && probe("quota-trend-return") == nil }) else {
+            FileHandle.standardError.write(Data("Keyboard back: progress=\(probe("quota-progress") != nil), back=\(probe("quota-trend-return") != nil)\n".utf8))
+            return fail()
+        }
         closePopover()
         showPopover(clearInitialFocus: true)
         guard await waitFor({ probe("quota-progress")?.controlFocused == false && probe("quota-trend-return") == nil }) else { return fail() }

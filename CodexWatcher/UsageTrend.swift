@@ -2,17 +2,35 @@ import Foundation
 import CryptoKit
 import Darwin
 
-struct UsageTrendSample: Codable, Equatable {
+struct UsageTrendSample: Codable, Equatable, Sendable {
     let date: Date
     let remaining: Double
     let reset: Date
     let segment: UUID
 }
 
+struct UsageTrendWriteResult: Sendable {
+    let history: [String: [UsageTrendSample]]
+    let recoveredFromCorruption: Bool
+}
+
 /// A local, bounded history. Only successful foreground reads are recorded.
-final class UsageTrendStore {
+final class UsageTrendStore: @unchecked Sendable {
     private let directory: URL
-    init(directory: URL) { self.directory = directory }
+    private let queue: DispatchQueue
+    init(directory: URL, queue: DispatchQueue = DispatchQueue(label: "CodexWatcher.usage-trend", qos: .utility)) {
+        self.directory = directory
+        self.queue = queue
+    }
+
+    func recordInBackground(account: String, windows: [UsageWindow], at date: Date) async throws -> UsageTrendWriteResult {
+        try await withCheckedThrowingContinuation { continuation in
+            queue.async {
+                do { continuation.resume(returning: try self.recordResult(account: account, windows: windows, at: date)) }
+                catch { continuation.resume(throwing: error) }
+            }
+        }
+    }
 
     private func file(account: String) -> URL {
         let key = SHA256.hash(data: Data(account.utf8)).map { String(format: "%02x", $0) }.joined()
@@ -20,6 +38,10 @@ final class UsageTrendStore {
     }
 
     func record(account: String, windows: [UsageWindow], at date: Date) throws -> [String: [UsageTrendSample]] {
+        try recordResult(account: account, windows: windows, at: date).history
+    }
+
+    func recordResult(account: String, windows: [UsageWindow], at date: Date) throws -> UsageTrendWriteResult {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true,
                                                attributes: [.posixPermissions: 0o700])
         let file = file(account: account)
@@ -29,8 +51,22 @@ final class UsageTrendStore {
         guard flock(descriptor, LOCK_EX) == 0 else { throw POSIXError(.EIO) }
         defer { _ = flock(descriptor, LOCK_UN) }
         var history: [String: [UsageTrendSample]] = [:]
+        var recovered = false
         if FileManager.default.fileExists(atPath: file.path) {
-            history = try JSONDecoder().decode([String: [UsageTrendSample]].self, from: Data(contentsOf: file))
+            let data = try Data(contentsOf: file)
+            do {
+                history = try JSONDecoder().decode([String: [UsageTrendSample]].self, from: data)
+            } catch is DecodingError {
+                // Disposable history differs from irreversible reset records. Preserve
+                // one quarantined copy per account and rebuild under the same lock.
+                let quarantine = file.appendingPathExtension("corrupt")
+                if FileManager.default.fileExists(atPath: quarantine.path) {
+                    try FileManager.default.removeItem(at: quarantine)
+                }
+                try FileManager.default.moveItem(at: file, to: quarantine)
+                try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: quarantine.path)
+                recovered = true
+            }
         }
         for key in Array(history.keys) {
             history[key] = Array(history[key, default: []].filter {
@@ -66,7 +102,7 @@ final class UsageTrendStore {
         }
         try JSONEncoder().encode(history).write(to: file, options: .atomic)
         try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
-        return history
+        return UsageTrendWriteResult(history: history, recoveredFromCorruption: recovered)
     }
 }
 

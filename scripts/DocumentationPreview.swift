@@ -78,6 +78,7 @@ struct DocumentationPreview {
                                       at: Date(timeIntervalSince1970: now + Double(minute * 60)))
         }
         await monitor.refresh()
+        await monitor.waitForTrendPersistence()
         guard monitor.account?.email == "demo@example.com", monitor.snapshot != nil else {
             fatalError("Demo fixture failed to load")
         }
@@ -107,11 +108,13 @@ struct DocumentationPreview {
         defaults.set("light", forKey: "appearance")
         try JSONEncoder().encode(shortOnly).write(to: temporary.appendingPathComponent("usage.json"))
         await monitor.refresh()
+        await monitor.waitForTrendPersistence()
         try await render(ContentView(monitor: monitor).defaultAppStorage(defaults),
                          size: NSSize(width: 390, height: 660), dark: false,
                          to: output.appendingPathComponent("dashboard-pro-short-only.png"))
         try JSONEncoder().encode(snapshot).write(to: temporary.appendingPathComponent("usage.json"))
         await monitor.refresh()
+        await monitor.waitForTrendPersistence()
         defaults.set("light", forKey: "appearance")
         try await render(MenuBarSettingsView(monitor: monitor).defaultAppStorage(defaults),
                          size: NSSize(width: 380, height: 280), dark: false,
@@ -155,11 +158,13 @@ struct DocumentationPreview {
                          to: output.appendingPathComponent("dashboard-expanded.png"))
         try Data().write(to: temporary.appendingPathComponent("reject-usage"))
         await monitor.refresh()
+        await monitor.waitForTrendPersistence()
         try await render(ContentView(monitor: monitor).defaultAppStorage(defaults),
                          size: NSSize(width: 390, height: 660), dark: false,
                          to: output.appendingPathComponent("dashboard-offline.png"))
         try Data(#"{"account":null}"#.utf8).write(to: temporary.appendingPathComponent("account.json"))
         await monitor.refresh()
+        await monitor.waitForTrendPersistence()
         try await render(ContentView(monitor: monitor).defaultAppStorage(defaults),
                          size: NSSize(width: 390, height: 440), dark: false,
                          to: output.appendingPathComponent("welcome.png"))

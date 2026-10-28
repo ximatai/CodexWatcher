@@ -7,6 +7,7 @@ struct UsageTrendView: View {
     let date: Date
     let stale: Bool
     let storageFailed: Bool
+    var recoveredHistory = false
     var headerAction: AnyView? = nil
     @Environment(\.locale) private var locale
     @Environment(\.timeZone) private var timeZone
@@ -118,6 +119,7 @@ struct UsageTrendView: View {
     private var summary: String {
         if storageFailed { return String(localized: "无法保存趋势数据，请检查本地存储。") }
         if stale { return String(localized: "数据待更新，预测已暂停。") }
+        if recoveredHistory { return String(localized: "历史数据已恢复，正在重新采样") }
         if quota.usedPercent >= 100 { return String(localized: "当前额度已耗尽，等待重置。") }
         guard let forecast else { return String(localized: "正在积累数据") }
         guard let exhaustion = forecast.exhaustion else { return String(localized: "近期无消耗") }

@@ -51,6 +51,7 @@ private struct DashboardContent: View {
     @State private var hoveringReturnProgress = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var usageControlFocused: Bool
+    @State private var usageFocusGeneration = UUID()
     @State private var contentHeights: [DashboardRegion: CGFloat] = [:]
     @State private var resetConfirmation: ResetConfirmation?
     @State private var showingMenuBarSettings = false
@@ -114,6 +115,7 @@ private struct DashboardContent: View {
             hoveringProgress = false
             hoveringReturnProgress = false
             usageControlFocused = false
+            usageFocusGeneration = UUID()
         }
         .onPreferenceChange(DashboardHeightPreference.self) { heights in
             if !flexibleSize { contentHeights = heights }
@@ -302,7 +304,7 @@ private struct DashboardContent: View {
             if showingUsageTrend {
                 UsageTrendView(samples: monitor.trendHistory[window.id] ?? [], quota: window.quota,
                                date: date, stale: stale, storageFailed: monitor.trendStorageFailed,
-                               headerAction: AnyView(
+                               recoveredHistory: monitor.trendStorageRecovered, headerAction: AnyView(
                     Button {
                         changeUsagePresentation(false)
                     } label: {
@@ -413,13 +415,17 @@ private struct DashboardContent: View {
         usageControlFocused = false
         hoveringProgress = false
         hoveringReturnProgress = false
-        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.16)) {
+        let focusGeneration = UUID()
+        usageFocusGeneration = focusGeneration
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.16), completionCriteria: .removed) {
             showingUsageTrend = trend
-        }
-        // Only keyboard activation transfers focus to the replacement control.
-        if restoreKeyboardFocus {
+        } completion: {
+            // Restoring during the outgoing view's animation can leave the binding
+            // focused while AppKit has already discarded its actual responder.
+            guard restoreKeyboardFocus else { return }
             Task { @MainActor in
                 await Task.yield()
+                guard usageFocusGeneration == focusGeneration, showingUsageTrend == trend else { return }
                 usageControlFocused = true
             }
         }

@@ -141,6 +141,19 @@ final class UsageTrendTests: XCTestCase {
         }
     }
 
+    func testHistoryReadFailureDoesNotQuarantineSource() throws {
+        try withStore { store, directory in
+            _ = try store.record(account: "a", windows: [window(20)], at: now)
+            let file = try XCTUnwrap(FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+                .first { $0.pathExtension == "json" })
+            try FileManager.default.removeItem(at: file)
+            try FileManager.default.createDirectory(at: file, withIntermediateDirectories: false)
+            XCTAssertThrowsError(try store.record(account: "a", windows: [window(30)], at: now))
+            XCTAssertTrue(FileManager.default.fileExists(atPath: file.path))
+            XCTAssertFalse(FileManager.default.fileExists(atPath: file.appendingPathExtension("corrupt").path))
+        }
+    }
+
     func testRetentionAndCorruptStorage() throws {
         try withStore { store, directory in
             _ = try store.record(account: "a", windows: [window(20)], at: now)
@@ -148,7 +161,16 @@ final class UsageTrendTests: XCTestCase {
             XCTAssertEqual(pruned["codex.primary"]?.count, 1)
             let file = try XCTUnwrap(FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil).first { $0.pathExtension == "json" })
             try Data("broken".utf8).write(to: file)
-            XCTAssertThrowsError(try store.record(account: "a", windows: [window(20)], at: now))
+            let recovered = try store.recordResult(account: "a", windows: [window(20)], at: now)
+            XCTAssertTrue(recovered.recoveredFromCorruption)
+            XCTAssertEqual(recovered.history["codex.primary"]?.map(\.remaining), [80])
+            XCTAssertEqual(try Data(contentsOf: file.appendingPathExtension("corrupt")), Data("broken".utf8))
+            let next = try store.recordResult(account: "a", windows: [window(30)], at: now.addingTimeInterval(300))
+            XCTAssertFalse(next.recoveredFromCorruption)
+            XCTAssertEqual(next.history["codex.primary"]?.map(\.remaining), [80, 70])
+            try Data("broken-again".utf8).write(to: file)
+            _ = try store.record(account: "a", windows: [window(20)], at: now.addingTimeInterval(600))
+            XCTAssertEqual(try Data(contentsOf: file.appendingPathExtension("corrupt")), Data("broken-again".utf8))
         }
     }
 }
