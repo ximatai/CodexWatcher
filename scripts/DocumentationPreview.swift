@@ -89,6 +89,12 @@ struct DocumentationPreview {
                              to: output.appendingPathComponent(dark ? "dashboard-dark.png" : "dashboard-light.png"))
         }
         for dark in [false, true] {
+            defaults.set(dark ? "dark" : "light", forKey: "appearance")
+            try await render(ContentView(monitor: monitor, initiallyHoveringProgress: true).defaultAppStorage(defaults),
+                size: NSSize(width: 390, height: 660), dark: dark,
+                to: output.appendingPathComponent(dark ? "dashboard-progress-hover-dark.png" : "dashboard-progress-hover-light.png"))
+        }
+        for dark in [false, true] {
             try await render(UsageTrendView(samples: monitor.trendHistory["codex.primary"] ?? [],
                 quota: shortQuota, date: Date(), stale: false, storageFailed: false).padding(16),
                 size: NSSize(width: 390, height: 330), dark: dark,

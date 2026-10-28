@@ -16,11 +16,12 @@ struct ContentView: View {
     var flexibleSize = false
     var maximumHeight: CGFloat = 660
     var initiallyShowingTrend = false
+    var initiallyHoveringProgress = false
     private let presentationID = UUID()
     @AppStorage("appearance") private var appearance = AppAppearance.system.rawValue
 
     var body: some View {
-        DashboardContent(monitor: monitor, updates: updates, dismissForUpdate: dismissForUpdate, appearance: $appearance, handlesExpiryReminders: handlesExpiryReminders, openDashboard: openDashboard, presentSettings: presentSettings, presentReset: presentReset, flexibleSize: flexibleSize, maximumHeight: maximumHeight, presentationID: presentationID, showingUsageTrend: initiallyShowingTrend)
+        DashboardContent(monitor: monitor, updates: updates, dismissForUpdate: dismissForUpdate, appearance: $appearance, handlesExpiryReminders: handlesExpiryReminders, openDashboard: openDashboard, presentSettings: presentSettings, presentReset: presentReset, flexibleSize: flexibleSize, maximumHeight: maximumHeight, presentationID: presentationID, showingUsageTrend: initiallyShowingTrend, hoveringProgress: initiallyHoveringProgress)
             .onAppear { applyAppearance() }
             .onChange(of: appearance) { _, _ in applyAppearance() }
     }
@@ -47,7 +48,7 @@ private struct DashboardContent: View {
     let maximumHeight: CGFloat
     let presentationID: UUID
     @State var showingUsageTrend = false
-    @State private var hoveringProgress = false
+    @State var hoveringProgress = false
     @State private var hoveringReturnProgress = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var usageControlFocused: Bool
@@ -370,23 +371,24 @@ private struct DashboardContent: View {
                 .accessibilityLabel("查看额度趋势")
                 .accessibilityValue("已用 \(format.percent(window.quota.usedPercent))；参考进度 \(standard.map { format.percent($0) } ?? "未知")；较参考进度 \(deviation.map { format.deviation($0) } ?? "待更新")")
                 .accessibilityHint("切换到剩余额度趋势面板")
-                HStack(alignment: .firstTextBaseline) {
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Text("参考进度").foregroundStyle(.secondary)
+                // Expand the hit area outward; keep the track aligned with the content edges.
+                .padding(.horizontal, -8)
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("参考进度").font(.caption).foregroundStyle(.secondary)
+                            .help("按额度周期的自然时间计算，包含睡眠和休息时间。")
                         Text(standard.map { format.percent($0, decimals: 1) } ?? "—")
-                            .monospacedDigit()
+                            .font(.system(size: 20, weight: .semibold)).monospacedDigit()
                     }
-                    .help("按额度周期的自然时间计算，包含睡眠和休息时间。")
-                    Spacer(minLength: 8)
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Text(deviation.map { $0 >= 0 ? "超前" : "滞后" } ?? "较参考进度")
-                            .foregroundStyle(.secondary)
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 5) {
+                        Text(deviation.map { $0 >= 0 ? "消耗超前" : "消耗滞后" } ?? "较参考进度")
+                            .font(.caption).foregroundStyle(.secondary)
                         Text(deviation.map { format.deviation(abs($0), signed: false) } ?? "待更新")
-                            .monospacedDigit()
+                            .font(.system(size: 16, weight: .semibold)).monospacedDigit()
                             .foregroundStyle(palette.deviationColor(deviation))
                     }
                 }
-                .font(.system(size: 12, weight: .medium))
                 .help("实际用量减去参考进度，单位为百分点。")
             }
             if let reset = window.quota.resetDate {
@@ -395,6 +397,7 @@ private struct DashboardContent: View {
                           systemImage: "arrow.clockwise")
                         .font(.system(size: 12, weight: .medium))
                     Spacer(minLength: 8)
+                    Text(format.compactDate(reset)).font(.system(size: 11)).foregroundStyle(.secondary)
                 }.help(format.date(reset, precise: true))
             }
             if stale && monitor.errorMessage == nil {
