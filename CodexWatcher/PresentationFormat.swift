@@ -3,7 +3,7 @@ import Foundation
 enum CreditExpiryUrgency {
     case withinThreeDays, tomorrow, today
 
-    var title: String {
+    var title: String.LocalizationValue {
         switch self {
         case .withinThreeDays: return "三天内"
         case .tomorrow: return "明日到期"
@@ -35,21 +35,8 @@ struct PresentationFormat {
         text(urgency.title)
     }
 
-    private func text(_ key: String) -> String {
-        #if SWIFT_PACKAGE
-        let resources = Bundle.module
-        #else
-        let resources = Bundle.main
-        #endif
-        let language = locale.language.languageCode?.identifier == "zh" ? "zh-Hans" : "en"
-        // Classic SwiftPM normalizes directory names (zh-hans); Xcode preserves zh-Hans.
-        // Resolve the actual bundle localization instead of relying on filesystem case folding.
-        let localization = resources.localizations.first {
-            $0.caseInsensitiveCompare(language) == .orderedSame
-        } ?? language
-        let bundle = resources.path(forResource: localization, ofType: "lproj")
-            .flatMap(Bundle.init(path:)) ?? resources
-        return bundle.localizedString(forKey: key, value: key, table: nil)
+    private func text(_ resource: String.LocalizationValue) -> String {
+        L10n.text(resource, locale: locale)
     }
 
     func date(_ date: Date, precise: Bool = false, timeOnly: Bool = false) -> String {
@@ -92,7 +79,7 @@ struct PresentationFormat {
     }
 
     func deviation(_ value: Double, signed: Bool = true) -> String {
-        "\(number(value, decimals: 1, signed: signed)) \(text("percentage points"))"
+        text("\(number(value, decimals: 1, signed: signed)) percentage points")
     }
 
     func duration(_ seconds: TimeInterval) -> String {
@@ -111,7 +98,7 @@ struct PresentationFormat {
 
     func quotaDuration(_ minutes: Double?) -> String {
         guard let minutes, minutes > 0 else { return text("Quota window") }
-        return String(format: text("%@ quota"), locale: locale, duration(minutes * 60))
+        return text("\(duration(minutes * 60)) quota")
     }
 
     func creditTitle(_ title: String?) -> String {

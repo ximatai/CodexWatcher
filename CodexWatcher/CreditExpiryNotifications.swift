@@ -11,7 +11,7 @@ final class CreditExpiryNotifications: NSObject, CreditExpiryNotificationService
         self.openReview = openReview
         super.init()
         center.delegate = self
-        let review = UNNotificationAction(identifier: "review-expiry", title: "查看并确认", options: [.foreground])
+        let review = UNNotificationAction(identifier: "review-expiry", title: L10n.text("查看并确认"), options: [.foreground])
         center.setNotificationCategories([UNNotificationCategory(identifier: "credit-expiry",
             actions: [review], intentIdentifiers: [], options: [])])
     }
@@ -23,11 +23,11 @@ final class CreditExpiryNotifications: NSObject, CreditExpiryNotificationService
     func deliver(_ reminder: CreditExpiryReminder) async throws {
         let settings = await center.notificationSettings()
         guard settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional else {
-            throw WatcherError.message("通知权限不可用。")
+            throw WatcherError.message(L10n.text("通知权限不可用。"))
         }
         let content = UNMutableNotificationContent()
-        content.title = "重置卡即将到期"
-        content.body = "有重置卡将在 15 分钟内到期。点击查看用量与有效期，确认后使用。"
+        content.title = L10n.text("重置卡即将到期")
+        content.body = L10n.text("有重置卡将在 15 分钟内到期。点击查看用量与有效期，确认后使用。")
         content.sound = .default
         content.categoryIdentifier = "credit-expiry"
         content.userInfo = ["accountKey": reminder.accountKey, "creditID": reminder.creditID]

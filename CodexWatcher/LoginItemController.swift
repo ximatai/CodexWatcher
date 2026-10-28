@@ -25,7 +25,7 @@ final class LoginItemController {
 
     var needsApproval: Bool { status == .requiresApproval }
     var isRequested: Bool { status == .enabled || needsApproval }
-    var title: String { needsApproval ? "登录时启动（待系统允许）" : "登录时启动" }
+    var title: String { needsApproval ? L10n.text("登录时启动（待系统允许）") : L10n.text("登录时启动") }
 
     func refresh() { status = readStatus() }
 
@@ -42,11 +42,11 @@ final class LoginItemController {
             if enabled && needsApproval { openSystemSettings() }
         } catch {
             let alert = NSAlert()
-            alert.messageText = "无法更新登录启动设置"
-            alert.informativeText = "请确认应用已正确签名并放在固定位置（建议“应用程序”文件夹），然后重试。也可在系统设置中管理登录项。"
+            alert.messageText = L10n.text("无法更新登录启动设置")
+            alert.informativeText = L10n.text("请确认应用已正确签名并放在固定位置（建议“应用程序”文件夹），然后重试。也可在系统设置中管理登录项。")
             alert.alertStyle = .warning
-            alert.addButton(withTitle: "好")
-            alert.addButton(withTitle: "打开系统设置")
+            alert.addButton(withTitle: L10n.text("好"))
+            alert.addButton(withTitle: L10n.text("打开系统设置"))
             NSApp.activate(ignoringOtherApps: true)
             if alert.runModal() == .alertSecondButtonReturn { openSystemSettings() }
         }

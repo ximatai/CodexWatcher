@@ -119,26 +119,26 @@ final class UsageMonitor {
     var executableAvailable: Bool { FileManager.default.isExecutableFile(atPath: executablePath) }
 
     func redemptionBlockingReason(for credit: ResetCredit, at date: Date) -> String? {
-        if isBusy { return "正在更新，请稍候" }
-        if pendingRedemption != nil { return "请先核实上次重置" }
-        if account?.type != "chatgpt" { return "请先连接 ChatGPT 账号" }
-        if isStale(at: date) || !canRedeem { return "请先刷新额度" }
-        if !credit.isUsable(at: date) { return "卡片当前不可用" }
+        if isBusy { return L10n.text("正在更新，请稍候") }
+        if pendingRedemption != nil { return L10n.text("请先核实上次重置") }
+        if account?.type != "chatgpt" { return L10n.text("请先连接 ChatGPT 账号") }
+        if isStale(at: date) || !canRedeem { return L10n.text("请先刷新额度") }
+        if !credit.isUsable(at: date) { return L10n.text("卡片当前不可用") }
         return nil
     }
 
     var expiryStatusTitle: String {
-        guard expiryConfiguration.mode != .off else { return "临期处理" }
-        guard expiryConfigurationMatchesAccount else { return "账号不匹配 · 已暂停" }
-        if isRedeeming { return "正在重置" }
+        guard expiryConfiguration.mode != .off else { return L10n.text("临期处理") }
+        guard expiryConfigurationMatchesAccount else { return L10n.text("账号不匹配 · 已暂停") }
+        if isRedeeming { return L10n.text("正在重置") }
         if pendingRedemption != nil {
             if let automatic = pendingRedemption?.automatic, automaticRetryDate != nil {
-                return "待重试 · \(automatic.attempts)/3"
+                return L10n.text("待重试 · \(automatic.attempts)/3")
             }
-            return "待核实"
+            return L10n.text("待核实")
         }
-        if errorMessage != nil { return "连接待恢复" }
-        return expiryConfiguration.mode == .automatic ? "自动使用已开启" : "临期提醒已开启"
+        if errorMessage != nil { return L10n.text("连接待恢复") }
+        return expiryConfiguration.mode == .automatic ? L10n.text("自动使用已开启") : L10n.text("临期提醒已开启")
     }
 
     var automaticRetryDate: Date? {
@@ -339,19 +339,19 @@ final class UsageMonitor {
             guard let value = response.authUrl, let url = URL(string: value), url.scheme == "https",
                   let host = url.host, ["auth.openai.com", "chatgpt.com", "auth0.openai.com"].contains(host) else {
                 await cancelLogin()
-                throw WatcherError.message("登录链接不可用，请更新 Codex CLI 后重试。")
+                throw WatcherError.message(L10n.text("登录链接不可用，请更新 Codex CLI 后重试。"))
             }
             loginURL = url
             guard NSWorkspace.shared.open(url) else {
                 await cancelLogin()
-                throw WatcherError.message("无法打开浏览器，请检查默认浏览器设置。")
+                throw WatcherError.message(L10n.text("无法打开浏览器，请检查默认浏览器设置。"))
             }
             errorMessage = nil
             loginTimeout?.cancel()
             loginTimeout = Task { @MainActor [weak self] in
                 do { try await Task.sleep(for: .seconds(600)) } catch { return }
                 await self?.cancelLogin()
-                self?.errorMessage = "登录等待已结束，请重新连接。"
+                self?.errorMessage = L10n.text("登录等待已结束，请重新连接。")
             }
         } catch { errorMessage = error.localizedDescription }
     }
@@ -391,7 +391,7 @@ final class UsageMonitor {
     func redeem(_ confirmation: ResetConfirmation, automatically: Bool = false) async {
         if automatically && !automaticExpiryAllowed(confirmation, at: expiryNow()) { return }
         guard isResetConfirmationCurrent(confirmation) else {
-            showNotice("操作已变化，请重新打开确认页。", kind: .warning)
+            showNotice(L10n.text("操作已变化，请重新打开确认页。"), kind: .warning)
             return
         }
         guard canConfirmRedemption(confirmation, at: .now) else { return }
@@ -420,7 +420,7 @@ final class UsageMonitor {
             // The dialog may have remained open across expiry, reconnection or an account change.
             try await readAccountAndUsage()
             guard isResetConfirmationCurrent(confirmation) else {
-                showNotice("操作已变化，请重新打开确认页。", kind: .warning)
+                showNotice(L10n.text("操作已变化，请重新打开确认页。"), kind: .warning)
                 return
             }
             if automatically {
@@ -438,12 +438,12 @@ final class UsageMonitor {
                 guard !isStale(at: .now), sortedCredits.contains(where: {
                     $0.id == confirmation.creditID && $0.isUsable(at: .now)
                 }) else {
-                    throw WatcherError.message("所选重置卡或额度状态已变化，请刷新后重新确认。")
+                    throw WatcherError.message(L10n.text("所选重置卡或额度状态已变化，请刷新后重新确认。"))
                 }
                 guard let created = try resetStore.prepareNew(creditID: confirmation.creditID, owner: storageKey,
                     automaticExpiresAt: automatically ? confirmation.credit?.expiresAt : nil) else {
                     pendingRedemption = try resetStore.pending(for: storageKey)
-                    showNotice("操作已变化，请重新打开确认页。", kind: .warning)
+                    showNotice(L10n.text("操作已变化，请重新打开确认页。"), kind: .warning)
                     return
                 }
                 attempt = created
@@ -470,10 +470,10 @@ final class UsageMonitor {
                 "creditId": attempt.creditID, "idempotencyKey": attempt.idempotencyKey
             ])
             switch result.outcome {
-            case "reset", "alreadyRedeemed": showNotice("重置已完成。", kind: .success)
-            case "nothingToReset": showNotice("当前没有符合条件的额度可重置。")
-            case "noCredit": showNotice("当前没有可用的重置卡。", kind: .warning)
-            default: throw WatcherError.message("重置结果未知，请重试原重置操作。")
+            case "reset", "alreadyRedeemed": showNotice(L10n.text("重置已完成。"), kind: .success)
+            case "nothingToReset": showNotice(L10n.text("当前没有符合条件的额度可重置。"))
+            case "noCredit": showNotice(L10n.text("当前没有可用的重置卡。"), kind: .warning)
+            default: throw WatcherError.message(L10n.text("重置结果未知，请重试原重置操作。"))
             }
             try resetStore.clear(owner: storageKey, idempotencyKey: attempt.idempotencyKey)
             pendingRedemption = nil
@@ -483,12 +483,12 @@ final class UsageMonitor {
                 try await readAccountAndUsage()
                 errorMessage = nil
             } catch {
-                errorMessage = "最新额度读取失败，请重新读取。"
+                errorMessage = L10n.text("最新额度读取失败，请重新读取。")
             }
         } catch {
             notice = nil
             errorMessage = pendingRedemption == nil ? error.localizedDescription
-                : "尚未确认重置结果。可重试原重置操作；若此前尚未完成，可能消耗 1 张卡。同一请求标识用于避免重复消费，操作无法撤销。"
+                : L10n.text("尚未确认重置结果。可重试原重置操作；若此前尚未完成，可能消耗 1 张卡。同一请求标识用于避免重复消费，操作无法撤销。")
         }
     }
 
@@ -508,7 +508,7 @@ final class UsageMonitor {
     func makeAutomaticExpiryAuthorization() -> AutomaticExpiryAuthorization? {
         guard !isBusy, loginID == nil, account?.type == "chatgpt",
               let owner = snapshot?.accountId, !owner.isEmpty else {
-            expiryHandlingMessage = "请先连接账号并刷新用量，再确认自动使用。"
+            expiryHandlingMessage = L10n.text("请先连接账号并刷新用量，再确认自动使用。")
             return nil
         }
         return AutomaticExpiryAuthorization(accountKey: owner)
@@ -523,16 +523,16 @@ final class UsageMonitor {
         let owner = redemptionStorageKey
         if mode != .off {
             guard account?.type == "chatgpt", let owner, !isBusy, loginID == nil else {
-                expiryHandlingMessage = "请先连接账号并刷新用量，再开启临期处理。"
+                expiryHandlingMessage = L10n.text("请先连接账号并刷新用量，再开启临期处理。")
                 return
             }
             if mode == .automatic {
                 guard snapshot?.accountId?.isEmpty == false else {
-                    expiryHandlingMessage = "服务端未提供稳定账号标识，无法开启自动使用。"
+                    expiryHandlingMessage = L10n.text("服务端未提供稳定账号标识，无法开启自动使用。")
                     return
                 }
                 guard authorization?.accountKey == owner else {
-                    expiryHandlingMessage = "账号已变化，请重新确认自动使用。"
+                    expiryHandlingMessage = L10n.text("账号已变化，请重新确认自动使用。")
                     return
                 }
             }
@@ -545,12 +545,12 @@ final class UsageMonitor {
                     expiryConfiguration = off
                 }
                 guard await requestExpiryNotificationPermission?() == true else {
-                    expiryHandlingMessage = "未获得通知权限。请在系统设置中允许 Codex Watcher 通知后重试。"
+                    expiryHandlingMessage = L10n.text("未获得通知权限。请在系统设置中允许 Codex Watcher 通知后重试。")
                     return
                 }
             }
             guard owner == redemptionStorageKey, account?.type == "chatgpt", loginID == nil else {
-                expiryHandlingMessage = "账号已变化，请重新设置。"
+                expiryHandlingMessage = L10n.text("账号已变化，请重新设置。")
                 return
             }
         }
@@ -561,7 +561,7 @@ final class UsageMonitor {
             lastExpiryCheck = nil
             expiryReview = nil
             clearExpiryNotifications?()
-        } catch { expiryHandlingMessage = "无法保存临期处理设置。" }
+        } catch { expiryHandlingMessage = L10n.text("无法保存临期处理设置。") }
     }
 
     private func automaticExpiryAllowed(_ confirmation: ResetConfirmation, at date: Date) -> Bool {
@@ -600,16 +600,16 @@ final class UsageMonitor {
         do {
             if let pending = pendingRedemption {
                 guard mode == .automatic, let automatic = pending.automatic else {
-                    expiryHandlingMessage = "已有待确认重置，请先核实原请求。"
+                    expiryHandlingMessage = L10n.text("已有待确认重置，请先核实原请求。")
                     return
                 }
                 guard automatic.attempts < CreditExpiryPolicy.maximumAttempts else {
-                    expiryHandlingMessage = "自动使用已尝试 3 次，请核实原请求。"
+                    expiryHandlingMessage = L10n.text("自动使用已尝试 3 次，请核实原请求。")
                     return
                 }
                 guard let confirmation = makeResetConfirmation(for: nil),
                       automaticExpiryAllowed(confirmation, at: expiryNow()) else {
-                    expiryHandlingMessage = "原卡片状态或到期时间已变化，已停止自动重试。"
+                    expiryHandlingMessage = L10n.text("原卡片状态或到期时间已变化，已停止自动重试。")
                     return
                 }
                 let now = expiryNow().timeIntervalSince1970
@@ -633,7 +633,7 @@ final class UsageMonitor {
                 updateAutomaticExpiryMessage()
             } else {
                 guard let deliverExpiryReminder else {
-                    expiryHandlingMessage = "通知暂不可用，请重新开启提醒模式。"
+                    expiryHandlingMessage = L10n.text("通知暂不可用，请重新开启提醒模式。")
                     return
                 }
                 guard try expiryStore.claim(reminder, mode: .remind) else { return }
@@ -645,20 +645,20 @@ final class UsageMonitor {
                         clearExpiryNotifications?()
                         return
                     }
-                    expiryHandlingMessage = "已发送临期提醒，确认后才会使用卡片。"
+                    expiryHandlingMessage = L10n.text("已发送临期提醒，确认后才会使用卡片。")
                 } catch {
                     try expiryStore.releaseReminder(reminder)
-                    expiryHandlingMessage = "临期通知未发送，请检查系统通知权限。"
+                    expiryHandlingMessage = L10n.text("临期通知未发送，请检查系统通知权限。")
                 }
             }
-        } catch { expiryHandlingMessage = "临期处理记录不可用，已跳过操作。请检查本地状态文件。" }
+        } catch { expiryHandlingMessage = L10n.text("临期处理记录不可用，已跳过操作。请检查本地状态文件。") }
     }
 
     private func updateAutomaticExpiryMessage() {
         if let automatic = pendingRedemption?.automatic {
             expiryHandlingMessage = automatic.attempts >= CreditExpiryPolicy.maximumAttempts
-                ? "自动使用已尝试 3 次，请核实原请求。"
-                : "自动使用结果未确认，将重试原卡片（\(automatic.attempts)/3）。"
+                ? L10n.text("自动使用已尝试 3 次，请核实原请求。")
+                : L10n.text("自动使用结果未确认，将重试原卡片（\(automatic.attempts)/3）。")
         } else if let errorMessage { expiryHandlingMessage = errorMessage }
         else { expiryHandlingMessage = notice }
     }
@@ -679,14 +679,14 @@ final class UsageMonitor {
             do { try await Task.sleep(for: .milliseconds(100)) } catch { return }
         }
         guard !isBusy else {
-            expiryHandlingMessage = "正在更新，请稍后在面板查看重置卡。"
+            expiryHandlingMessage = L10n.text("正在更新，请稍后在面板查看重置卡。")
             return
         }
         await refresh()
         guard accountKey == redemptionStorageKey, !isStale(at: .now),
               let card = sortedCredits.first(where: { $0.id == creditID }),
               makeResetConfirmation(for: card) != nil else {
-            expiryHandlingMessage = "提醒对应的账号或卡片已变化，请在面板重新查看。"
+            expiryHandlingMessage = L10n.text("提醒对应的账号或卡片已变化，请在面板重新查看。")
             return
         }
         expiryReview = CreditExpiryReview(accountKey: accountKey, creditID: creditID)
@@ -713,7 +713,7 @@ final class UsageMonitor {
         guard !isBusy, loginID == nil, account?.type == "chatgpt",
               let owner = snapshot?.accountId, !owner.isEmpty,
               helloWindows.contains(where: { $0.id == windowID }) else {
-            automaticHelloMessage = "请先连接账号并刷新额度。"
+            automaticHelloMessage = L10n.text("请先连接账号并刷新额度。")
             return nil
         }
         return AutomaticHelloAuthorization(accountKey: owner, windowID: windowID)
@@ -724,7 +724,7 @@ final class UsageMonitor {
             guard let authorization, !isBusy, loginID == nil, account?.type == "chatgpt",
                   snapshot?.accountId == authorization.accountKey,
                   helloWindows.contains(where: { $0.id == authorization.windowID }) else {
-                automaticHelloMessage = "账号或额度窗口已变化，请重新开启。"
+                automaticHelloMessage = L10n.text("账号或额度窗口已变化，请重新开启。")
                 return
             }
             automaticHelloConfiguration = AutomaticHelloConfiguration(enabled: true,
@@ -739,7 +739,7 @@ final class UsageMonitor {
             automaticHelloRecord = nil
             // Disabling never clears the disk latch, even when immediately re-enabled.
             if enabled && started { scheduleAutomaticHelloCheck() }
-        } catch { automaticHelloMessage = "无法保存自动 hello 设置。" }
+        } catch { automaticHelloMessage = L10n.text("无法保存自动 hello 设置。") }
     }
 
     // Foreground writes and expiring-card redemption preempt the optional background job.
@@ -803,7 +803,7 @@ final class UsageMonitor {
             guard identity?.type == "chatgpt",
                   let observation = helloObservation(config, snapshot: usage, startedAt: initialRead),
                   try resetStore.pending(for: owner) == nil else {
-                automaticHelloMessage = "账号、额度窗口或重置时间不可用，已暂停。"
+                automaticHelloMessage = L10n.text("账号、额度窗口或重置时间不可用，已暂停。")
                 return
             }
             let eligible = try helloStore.observe(observation, claim: false)
@@ -839,7 +839,7 @@ final class UsageMonitor {
             // If foreground work owns it, that work will update the UI instead.
             await refresh()
             if helloAuthorized(config, generation: generation), errorMessage != nil {
-                automaticHelloMessage = "hello 已完成，最新额度暂未读取成功。"
+                automaticHelloMessage = L10n.text("hello 已完成，最新额度暂未读取成功。")
             }
         } catch {
             if let attemptID = claimed?.attemptID {
@@ -851,10 +851,10 @@ final class UsageMonitor {
                 if case let WatcherError.message(message) = error {
                     automaticHelloMessage = message
                 } else {
-                    automaticHelloMessage = "本次 hello 结果未确认。"
+                    automaticHelloMessage = L10n.text("本次 hello 结果未确认。")
                 }
             } else {
-                automaticHelloMessage = "自动 hello 未能准备就绪，请检查 CLI、连接及本地记录。"
+                automaticHelloMessage = L10n.text("自动 hello 未能准备就绪，请检查 CLI、连接及本地记录。")
             }
         }
     }
@@ -862,13 +862,13 @@ final class UsageMonitor {
     func chooseExecutable() async {
         guard !isBusy, loginID == nil else { return }
         let panel = NSOpenPanel()
-        panel.title = "选择 Codex CLI 可执行文件"
+        panel.title = L10n.text("选择 Codex CLI 可执行文件")
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
         panel.directoryURL = URL(fileURLWithPath: "/opt/homebrew/bin")
         guard panel.runModal() == .OK, let url = panel.url else { return }
         guard FileManager.default.isExecutableFile(atPath: url.path) else {
-            errorMessage = "请选择可执行的 codex 文件。"
+            errorMessage = L10n.text("请选择可执行的 codex 文件。")
             return
         }
         beginAccountMutation()
@@ -888,7 +888,7 @@ final class UsageMonitor {
             loginURL = nil
             loginTimeout?.cancel()
             if params["success"] as? Bool != true {
-                errorMessage = "登录未完成，请重试；若官方客户端正在登录，请先完成该流程。"
+                errorMessage = L10n.text("登录未完成，请重试；若官方客户端正在登录，请先完成该流程。")
                 return
             }
         } else if method == "account/updated" {

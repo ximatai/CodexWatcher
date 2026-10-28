@@ -23,7 +23,8 @@ PLIST
 xcrun actool "$project_root/CodexWatcher/Assets.xcassets" \
   --compile "$preview_app/Contents/Resources" --platform macosx \
   --minimum-deployment-target 14.0 --target-device mac --output-format human-readable-text
-cp -R "$project_root/CodexWatcher/en.lproj" "$project_root/CodexWatcher/zh-Hans.lproj" "$preview_app/Contents/Resources/"
+xcrun xcstringstool compile "$project_root/CodexWatcher/Localizable.xcstrings" \
+  --output-directory "$preview_app/Contents/Resources"
 sources=()
 for source in "$project_root"/CodexWatcher/*.swift; do
   case "$source" in */MyApp.swift) continue ;; esac

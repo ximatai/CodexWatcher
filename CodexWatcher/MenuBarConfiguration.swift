@@ -3,7 +3,9 @@ import Foundation
 enum MenuBarIcon: String, CaseIterable, Identifiable {
     case gauge, chart, bolt, circle, none
     var id: String { rawValue }
-    var title: String {
+    var title: String { L10n.text(titleResource) }
+
+    var titleResource: String.LocalizationValue {
         switch self {
         case .gauge: return "仪表盘"
         case .chart: return "用量图表"

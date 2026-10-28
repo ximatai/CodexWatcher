@@ -24,7 +24,7 @@ final class ReleaseUpdateCheckerTests: XCTestCase {
         let checker = ReleaseUpdateChecker(version: "0.3.1", defaults: storage, fetch: { self.release() })
         let result = await checker.check()
         XCTAssertEqual(result, .available)
-        XCTAssertEqual(checker.menuTitle, "新版本 0.3.2…")
+        XCTAssertEqual(checker.menuTitle, L10n.text("新版本 \("0.3.2")…"))
         XCTAssertEqual(checker.releaseURL?.absoluteString, "https://github.com/ximatai/CodexWatcher/releases/tag/v0.3.2")
         let restarted = ReleaseUpdateChecker(version: "0.3.1", defaults: storage, fetch: { XCTFail("Cache must not fetch"); return self.release() })
         XCTAssertEqual(restarted.availableVersion, ReleaseVersion("0.3.2"))

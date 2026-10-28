@@ -1,0 +1,536 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>%@ percentage points</key>
+	<string>%@ 个百分点</string>
+	<key>%@ quota</key>
+	<string>%@额度</string>
+	<key>%@ 到期</key>
+	<string>%@ 到期</string>
+	<key>%@后重置</key>
+	<string>%@后重置</string>
+	<key>%@，已用 %@</key>
+	<string>%@，已用 %@</string>
+	<key>%lld 张可用</key>
+	<string>%lld 张可用</string>
+	<key>CLI 未提供独立临时会话，已跳过自动 hello。</key>
+	<string>CLI 未提供独立临时会话，已跳过自动 hello。</string>
+	<key>Codex CLI 启动失败：%@</key>
+	<string>Codex CLI 启动失败：%@</string>
+	<key>Codex Watcher</key>
+	<string>Codex Watcher</string>
+	<key>Codex Watcher · 左键查看用量，右键打开设置</key>
+	<string>Codex Watcher · 左键查看用量，右键打开设置</string>
+	<key>Codex Watcher · 用量待更新，偏移暂不可用。左键查看用量，右键打开设置</key>
+	<string>Codex Watcher · 用量待更新，偏移暂不可用。左键查看用量，右键打开设置</string>
+	<key>Codex 尚未连接。</key>
+	<string>Codex 尚未连接。</string>
+	<key>Codex 请求失败（%@），请检查登录状态或 CLI 版本。</key>
+	<string>Codex 请求失败（%@），请检查登录状态或 CLI 版本。</string>
+	<key>Codex 返回了无法识别的数据。</key>
+	<string>Codex 返回了无法识别的数据。</string>
+	<key>Codex 返回的数据超出预期。</key>
+	<string>Codex 返回的数据超出预期。</string>
+	<key>Codex 连接已断开，请刷新重连。</key>
+	<string>Codex 连接已断开，请刷新重连。</string>
+	<key>Full reset</key>
+	<string>完整额度重置卡</string>
+	<key>GitHub 请求受限，请稍后重试。</key>
+	<string>GitHub 请求受限，请稍后重试。</string>
+	<key>Less than a minute</key>
+	<string>不足 1 分钟</string>
+	<key>Quota window</key>
+	<string>额度窗口</string>
+	<key>Rate-limit reset</key>
+	<string>额度重置卡</string>
+	<key>hello 已完成</key>
+	<string>hello 已完成</string>
+	<key>hello 已完成，最新额度暂未读取成功。</key>
+	<string>hello 已完成，最新额度暂未读取成功。</string>
+	<key>percentage points</key>
+	<string>个百分点</string>
+	<key>三天内</key>
+	<string>三天内</string>
+	<key>上次选择的重置卡</key>
+	<string>上次选择的重置卡</string>
+	<key>上次重置结果未确认</key>
+	<string>上次重置结果未确认</string>
+	<key>临期处理</key>
+	<string>临期处理</string>
+	<key>临期处理记录不可用，已跳过操作。请检查本地状态文件。</key>
+	<string>临期处理记录不可用，已跳过操作。请检查本地状态文件。</string>
+	<key>临期提醒已开启</key>
+	<string>临期提醒已开启</string>
+	<key>临期通知未发送，请检查系统通知权限。</key>
+	<string>临期通知未发送，请检查系统通知权限。</string>
+	<key>亮色</key>
+	<string>亮色</string>
+	<key>仅 Mac 唤醒且应用运行时生效</key>
+	<string>仅 Mac 唤醒且应用运行时生效</string>
+	<key>今日到期</key>
+	<string>今日到期</string>
+	<key>仪表盘</key>
+	<string>仪表盘</string>
+	<key>会消耗模型额度，仅在应用运行且 Mac 唤醒时生效。</key>
+	<string>会消耗模型额度，仅在应用运行且 Mac 唤醒时生效。</string>
+	<key>使用</key>
+	<string>使用</string>
+	<key>使用 ChatGPT 连接</key>
+	<string>使用 ChatGPT 连接</string>
+	<key>使用%@</key>
+	<string>使用%@</string>
+	<key>使用帮助</key>
+	<string>使用帮助</string>
+	<key>使用重置卡</key>
+	<string>使用重置卡</string>
+	<key>信息未提供</key>
+	<string>信息未提供</string>
+	<key>关于 Codex Watcher</key>
+	<string>关于 Codex Watcher</string>
+	<key>关闭</key>
+	<string>关闭</string>
+	<key>关闭提示</key>
+	<string>关闭提示</string>
+	<key>切换到剩余额度趋势面板</key>
+	<string>切换到剩余额度趋势面板</string>
+	<key>到期前 15 分钟会自动使用重置卡，失败时最多重试 2 次。
+
+即使当前额度非常充裕，甚至没有使用，也会尝试使用重置卡。卡片消耗后无法恢复。</key>
+	<string>到期前 15 分钟会自动使用重置卡，失败时最多重试 2 次。
+
+即使当前额度非常充裕，甚至没有使用，也会尝试使用重置卡。卡片消耗后无法恢复。</string>
+	<key>到期前 15 分钟处理</key>
+	<string>到期前 15 分钟处理</string>
+	<key>刷新</key>
+	<string>刷新</string>
+	<key>刷新额度</key>
+	<string>刷新额度</string>
+	<key>前往下载</key>
+	<string>前往下载</string>
+	<key>剩余 %@</key>
+	<string>剩余 %@</string>
+	<key>剩余额度</key>
+	<string>剩余额度</string>
+	<key>剩余额度趋势</key>
+	<string>剩余额度趋势</string>
+	<key>卡片到期</key>
+	<string>卡片到期</string>
+	<key>卡片当前不可用</key>
+	<string>卡片当前不可用</string>
+	<key>卡片消耗后无法撤销</key>
+	<string>卡片消耗后无法撤销</string>
+	<key>卡片消耗后无法撤销；最多尝试 3 次，间隔至少 30 秒，始终复用原请求。</key>
+	<string>卡片消耗后无法撤销；最多尝试 3 次，间隔至少 30 秒，始终复用原请求。</string>
+	<key>历史</key>
+	<string>历史</string>
+	<key>历史数据已恢复，正在重新采样</key>
+	<string>历史数据已恢复，正在重新采样</string>
+	<key>历史采样</key>
+	<string>历史采样</string>
+	<key>原卡片状态或到期时间已变化，已停止自动重试。</key>
+	<string>原卡片状态或到期时间已变化，已停止自动重试。</string>
+	<key>原额度窗口不可用</key>
+	<string>原额度窗口不可用</string>
+	<key>参考进度</key>
+	<string>参考进度</string>
+	<key>发现新版本 %@</key>
+	<string>发现新版本 %@</string>
+	<key>取消</key>
+	<string>取消</string>
+	<key>可能消耗 1 张 · 操作无法撤销</key>
+	<string>可能消耗 1 张 · 操作无法撤销</string>
+	<key>启用</key>
+	<string>启用</string>
+	<key>启用自动使用？</key>
+	<string>启用自动使用？</string>
+	<key>图标</key>
+	<string>图标</string>
+	<key>圆环</key>
+	<string>圆环</string>
+	<key>在系统设置中允许…</key>
+	<string>在系统设置中允许…</string>
+	<key>处理方式</key>
+	<string>处理方式</string>
+	<key>外观</key>
+	<string>外观</string>
+	<key>好</key>
+	<string>好</string>
+	<key>安装帮助</key>
+	<string>安装帮助</string>
+	<key>完成</key>
+	<string>完成</string>
+	<key>实线表示历史采样，虚线表示近期趋势；淡色范围来自已观测的不同消耗速度，并非统计置信区间。中断采样或额度恢复后重新积累预测样本。</key>
+	<string>实线表示历史采样，虚线表示近期趋势；淡色范围来自已观测的不同消耗速度，并非统计置信区间。中断采样或额度恢复后重新积累预测样本。</string>
+	<key>实际用量减去参考进度，pp 表示百分点。</key>
+	<string>实际用量减去参考进度，pp 表示百分点。</string>
+	<key>实际用量减去参考进度，单位为百分点。</key>
+	<string>实际用量减去参考进度，单位为百分点。</string>
+	<key>将为此账号在所选额度恢复满额时自动发送一次 hello，会消耗模型额度。当前已满额时也会发送。</key>
+	<string>将为此账号在所选额度恢复满额时自动发送一次 hello，会消耗模型额度。当前已满额时也会发送。</string>
+	<key>将重试原操作，同一请求标识用于避免重复消费。重置范围由服务器决定。</key>
+	<string>将重试原操作，同一请求标识用于避免重复消费。重置范围由服务器决定。</string>
+	<key>尚未确认重置结果。可重试原重置操作；若此前尚未完成，可能消耗 1 张卡。同一请求标识用于避免重复消费，操作无法撤销。</key>
+	<string>尚未确认重置结果。可重试原重置操作；若此前尚未完成，可能消耗 1 张卡。同一请求标识用于避免重复消费，操作无法撤销。</string>
+	<key>尚未连接</key>
+	<string>尚未连接</string>
+	<key>已到期，等待刷新</key>
+	<string>已到期，等待刷新</string>
+	<key>已发送临期提醒，确认后才会使用卡片。</key>
+	<string>已发送临期提醒，确认后才会使用卡片。</string>
+	<key>已是最新版本</key>
+	<string>已是最新版本</string>
+	<key>已有待确认重置，请先核实原请求。</key>
+	<string>已有待确认重置，请先核实原请求。</string>
+	<key>已用</key>
+	<string>已用</string>
+	<key>已用 %@ · 剩余 %@</key>
+	<string>已用 %@ · 剩余 %@</string>
+	<key>已用 %@；参考进度 %@；偏移 %@</key>
+	<string>已用 %@；参考进度 %@；偏移 %@</string>
+	<key>已用 %@；参考进度 %@；较参考进度 %@</key>
+	<string>已用 %@；参考进度 %@；较参考进度 %@</string>
+	<key>已用百分比</key>
+	<string>已用百分比</string>
+	<key>已隐藏</key>
+	<string>已隐藏</string>
+	<key>开启</key>
+	<string>开启</string>
+	<key>开启满额自动 hello？</key>
+	<string>开启满额自动 hello？</string>
+	<key>当前不可用，请取消并刷新。</key>
+	<string>当前不可用，请取消并刷新。</string>
+	<key>当前没有可用的重置卡。</key>
+	<string>当前没有可用的重置卡。</string>
+	<key>当前没有符合条件的额度可重置。</key>
+	<string>当前没有符合条件的额度可重置。</string>
+	<key>当前用量</key>
+	<string>当前用量</string>
+	<key>当前额度已耗尽，等待重置。</key>
+	<string>当前额度已耗尽，等待重置。</string>
+	<key>待更新</key>
+	<string>待更新</string>
+	<key>待核实</key>
+	<string>待核实</string>
+	<key>待重试 · %lld/3</key>
+	<string>待重试 · %lld/3</string>
+	<key>所选重置卡或额度状态已变化，请刷新后重新确认。</key>
+	<string>所选重置卡或额度状态已变化，请刷新后重新确认。</string>
+	<key>打开独立窗口</key>
+	<string>打开独立窗口</string>
+	<key>打开确认页</key>
+	<string>打开确认页</string>
+	<key>打开系统设置</key>
+	<string>打开系统设置</string>
+	<key>按近期速度，预计可用到本次重置。</key>
+	<string>按近期速度，预计可用到本次重置。</string>
+	<key>按额度周期的自然时间计算，包含睡眠和休息时间。</key>
+	<string>按额度周期的自然时间计算，包含睡眠和休息时间。</string>
+	<key>提醒后确认</key>
+	<string>提醒后确认</string>
+	<key>提醒对应的账号或卡片已变化，请在面板重新查看。</key>
+	<string>提醒对应的账号或卡片已变化，请在面板重新查看。</string>
+	<key>操作已变化，请取消后重新打开。</key>
+	<string>操作已变化，请取消后重新打开。</string>
+	<key>操作已变化，请重新打开确认页。</key>
+	<string>操作已变化，请重新打开确认页。</string>
+	<key>敏感信息已隐藏</key>
+	<string>敏感信息已隐藏</string>
+	<key>数据待更新</key>
+	<string>数据待更新</string>
+	<key>数据待更新，预测已暂停。</key>
+	<string>数据待更新，预测已暂停。</string>
+	<key>新版本 %@…</key>
+	<string>新版本 %@…</string>
+	<key>无图标</key>
+	<string>无图标</string>
+	<key>无法保存临期处理设置。</key>
+	<string>无法保存临期处理设置。</string>
+	<key>无法保存自动 hello 设置。</key>
+	<string>无法保存自动 hello 设置。</string>
+	<key>无法保存趋势数据，请检查本地存储。</key>
+	<string>无法保存趋势数据，请检查本地存储。</string>
+	<key>无法打开浏览器，请检查默认浏览器设置。</key>
+	<string>无法打开浏览器，请检查默认浏览器设置。</string>
+	<key>无法更新登录启动设置</key>
+	<string>无法更新登录启动设置</string>
+	<key>早于重置约 %@</key>
+	<string>早于重置约 %@</string>
+	<key>时间</key>
+	<string>时间</string>
+	<key>明日到期</key>
+	<string>明日到期</string>
+	<key>暂无可用重置卡</key>
+	<string>暂无可用重置卡</string>
+	<key>暂无数据</key>
+	<string>暂无数据</string>
+	<key>暂无额度数据</key>
+	<string>暂无额度数据</string>
+	<key>暂时无法检查更新</key>
+	<string>暂时无法检查更新</string>
+	<key>暗色</key>
+	<string>暗色</string>
+	<key>更新于 %@</key>
+	<string>更新于 %@</string>
+	<key>最新额度读取失败，请重新读取。</key>
+	<string>最新额度读取失败，请重新读取。</string>
+	<key>最早 %@</key>
+	<string>最早 %@</string>
+	<key>最近一次成功检查</key>
+	<string>最近一次成功检查</string>
+	<key>有效期未提供</key>
+	<string>有效期未提供</string>
+	<key>有重置卡将在 15 分钟内到期。点击查看用量与有效期，确认后使用。</key>
+	<string>有重置卡将在 15 分钟内到期。点击查看用量与有效期，确认后使用。</string>
+	<key>服务器未提供全部卡片详情。</key>
+	<string>服务器未提供全部卡片详情。</string>
+	<key>服务端未提供稳定账号标识，无法开启自动使用。</key>
+	<string>服务端未提供稳定账号标识，无法开启自动使用。</string>
+	<key>未找到 Codex CLI，请安装后选择 codex 可执行文件。</key>
+	<string>未找到 Codex CLI，请安装后选择 codex 可执行文件。</string>
+	<key>未找到可用的默认文本模型，已跳过自动 hello。</key>
+	<string>未找到可用的默认文本模型，已跳过自动 hello。</string>
+	<key>未提供</key>
+	<string>未提供</string>
+	<key>未提供邮箱</key>
+	<string>未提供邮箱</string>
+	<key>未知</key>
+	<string>未知</string>
+	<key>未获得通知权限。请在系统设置中允许 Codex Watcher 通知后重试。</key>
+	<string>未获得通知权限。请在系统设置中允许 Codex Watcher 通知后重试。</string>
+	<key>本次 hello 结果未确认。</key>
+	<string>本次 hello 结果未确认。</string>
+	<key>本次不再补发</key>
+	<string>本次不再补发</string>
+	<key>查看并确认</key>
+	<string>查看并确认</string>
+	<key>查看并确认使用</key>
+	<string>查看并确认使用</string>
+	<key>查看额度趋势</key>
+	<string>查看额度趋势</string>
+	<key>根据最近一小时的消耗速度推算，至少需要 10 分钟及 3 个采样点。实线为历史，虚线为预测；淡色范围来自已观测的不同消耗速度，并非统计置信区间。预测随使用强度变化，仅供参考；中断采样或额度恢复后重新积累样本。</key>
+	<string>根据最近一小时的消耗速度推算，至少需要 10 分钟及 3 个采样点。实线为历史，虚线为预测；淡色范围来自已观测的不同消耗速度，并非统计置信区间。预测随使用强度变化，仅供参考；中断采样或额度恢复后重新积累样本。</string>
+	<key>检查更新…</key>
+	<string>检查更新…</string>
+	<key>正在发送…</key>
+	<string>正在发送…</string>
+	<key>正在更新，请稍候</key>
+	<string>正在更新，请稍候</string>
+	<key>正在更新，请稍候。</key>
+	<string>正在更新，请稍候。</string>
+	<key>正在更新，请稍后在面板查看重置卡。</key>
+	<string>正在更新，请稍后在面板查看重置卡。</string>
+	<key>正在检查更新…</key>
+	<string>正在检查更新…</string>
+	<key>正在积累数据</key>
+	<string>正在积累数据</string>
+	<key>正在连接…</key>
+	<string>正在连接…</string>
+	<key>正在重置</key>
+	<string>正在重置</string>
+	<key>正在重置…</key>
+	<string>正在重置…</string>
+	<key>每 30 秒检查。发送后以最新用量为基线，额外使用至少 1 个百分点、再恢复满额后才重新触发。关闭或重启不会清除去重记录；未知结果不补发。</key>
+	<string>每 30 秒检查。发送后以最新用量为基线，额外使用至少 1 个百分点、再恢复满额后才重新触发。关闭或重启不会清除去重记录；未知结果不补发。</string>
+	<key>每 5 分钟刷新</key>
+	<string>每 5 分钟刷新</string>
+	<key>消耗 1 张 · 操作无法撤销</key>
+	<string>消耗 1 张 · 操作无法撤销</string>
+	<key>消耗 1 张并重置</key>
+	<string>消耗 1 张并重置</string>
+	<key>消耗滞后</key>
+	<string>消耗滞后</string>
+	<key>消耗超前</key>
+	<string>消耗超前</string>
+	<key>滞后</key>
+	<string>滞后</string>
+	<key>满额时发送一次 hello</key>
+	<string>满额时发送一次 hello</string>
+	<key>满额自动 hello</key>
+	<string>满额自动 hello</string>
+	<key>满额自动 hello…</key>
+	<string>满额自动 hello…</string>
+	<key>点击查看趋势；刻度为参考进度，按额度周期的自然时间计算。</key>
+	<string>点击查看趋势；刻度为参考进度，按额度周期的自然时间计算。</string>
+	<key>状态栏显示</key>
+	<string>状态栏显示</string>
+	<key>状态栏显示…</key>
+	<string>状态栏显示…</string>
+	<key>状态栏预览 %@</key>
+	<string>状态栏预览 %@</string>
+	<key>现在</key>
+	<string>现在</string>
+	<key>用量偏移</key>
+	<string>用量偏移</string>
+	<key>用量图表</key>
+	<string>用量图表</string>
+	<key>用量已失效，请取消并刷新。</key>
+	<string>用量已失效，请取消并刷新。</string>
+	<key>登录时启动</key>
+	<string>登录时启动</string>
+	<key>登录时启动（待系统允许）</key>
+	<string>登录时启动（待系统允许）</string>
+	<key>登录未完成，请重试；若官方客户端正在登录，请先完成该流程。</key>
+	<string>登录未完成，请重试；若官方客户端正在登录，请先完成该流程。</string>
+	<key>登录等待已结束，请重新连接。</key>
+	<string>登录等待已结束，请重新连接。</string>
+	<key>登录链接不可用，请更新 Codex CLI 后重试。</key>
+	<string>登录链接不可用，请更新 Codex CLI 后重试。</string>
+	<key>等待浏览器完成登录…</key>
+	<string>等待浏览器完成登录…</string>
+	<key>等待重置更新</key>
+	<string>等待重置更新</string>
+	<key>纵轴为剩余额度 · 按最近一小时的消耗速度推算</key>
+	<string>纵轴为剩余额度 · 按最近一小时的消耗速度推算</string>
+	<key>自动 hello 回合标识无效。</key>
+	<string>自动 hello 回合标识无效。</string>
+	<key>自动 hello 已停止。</key>
+	<string>自动 hello 已停止。</string>
+	<key>自动 hello 未能准备就绪，请检查 CLI、连接及本地记录。</key>
+	<string>自动 hello 未能准备就绪，请检查 CLI、连接及本地记录。</string>
+	<key>自动 hello 条件已变化，已停止。</key>
+	<string>自动 hello 条件已变化，已停止。</string>
+	<key>自动 hello 结果未确认。</key>
+	<string>自动 hello 结果未确认。</string>
+	<key>自动 hello 请求了额外能力，已停止。</key>
+	<string>自动 hello 请求了额外能力，已停止。</string>
+	<key>自动使用</key>
+	<string>自动使用</string>
+	<key>自动使用已尝试 3 次，请核实原请求。</key>
+	<string>自动使用已尝试 3 次，请核实原请求。</string>
+	<key>自动使用已开启</key>
+	<string>自动使用已开启</string>
+	<key>自动使用结果未确认，将重试原卡片（%lld/3）。</key>
+	<string>自动使用结果未确认，将重试原卡片（%lld/3）。</string>
+	<key>自动处理每 30 秒检查并刷新</key>
+	<string>自动处理每 30 秒检查并刷新</string>
+	<key>设置与外观</key>
+	<string>设置与外观</string>
+	<key>详情暂不可用</key>
+	<string>详情暂不可用</string>
+	<key>请先刷新额度</key>
+	<string>请先刷新额度</string>
+	<key>请先核实上次重置</key>
+	<string>请先核实上次重置</string>
+	<key>请先连接 ChatGPT 账号</key>
+	<string>请先连接 ChatGPT 账号</string>
+	<key>请先连接账号并刷新用量，再开启临期处理。</key>
+	<string>请先连接账号并刷新用量，再开启临期处理。</string>
+	<key>请先连接账号并刷新用量，再确认自动使用。</key>
+	<string>请先连接账号并刷新用量，再确认自动使用。</string>
+	<key>请先连接账号并刷新额度。</key>
+	<string>请先连接账号并刷新额度。</string>
+	<key>请检查网络连接后重试。</key>
+	<string>请检查网络连接后重试。</string>
+	<key>请求超时，请刷新重连。</key>
+	<string>请求超时，请刷新重连。</string>
+	<key>请确认应用已正确签名并放在固定位置（建议“应用程序”文件夹），然后重试。也可在系统设置中管理登录项。</key>
+	<string>请确认应用已正确签名并放在固定位置（建议“应用程序”文件夹），然后重试。也可在系统设置中管理登录项。</string>
+	<key>请选择可执行的 codex 文件。</key>
+	<string>请选择可执行的 codex 文件。</string>
+	<key>账号</key>
+	<string>账号</string>
+	<key>账号、额度窗口或重置时间不可用，已暂停。</key>
+	<string>账号、额度窗口或重置时间不可用，已暂停。</string>
+	<key>账号不匹配 · 已暂停</key>
+	<string>账号不匹配 · 已暂停</string>
+	<key>账号不匹配，已暂停。请关闭后重新开启。</key>
+	<string>账号不匹配，已暂停。请关闭后重新开启。</string>
+	<key>账号已变化，请重新确认自动使用。</key>
+	<string>账号已变化，请重新确认自动使用。</string>
+	<key>账号已变化，请重新设置。</key>
+	<string>账号已变化，请重新设置。</string>
+	<key>账号或额度窗口已变化，请重新开启。</key>
+	<string>账号或额度窗口已变化，请重新开启。</string>
+	<key>超前</key>
+	<string>超前</string>
+	<key>趋势预测</key>
+	<string>趋势预测</string>
+	<key>跟随系统</key>
+	<string>跟随系统</string>
+	<key>较参考进度</key>
+	<string>较参考进度</string>
+	<key>较快消耗</key>
+	<string>较快消耗</string>
+	<key>较慢消耗</key>
+	<string>较慢消耗</string>
+	<key>近期无消耗</key>
+	<string>近期无消耗</string>
+	<key>近期未观测到额度消耗，暂不预测耗尽时间。</key>
+	<string>近期未观测到额度消耗，暂不预测耗尽时间。</string>
+	<key>返回进度</key>
+	<string>返回进度</string>
+	<key>连接已关闭。</key>
+	<string>连接已关闭。</string>
+	<key>连接待恢复</key>
+	<string>连接待恢复</string>
+	<key>退出应用</key>
+	<string>退出应用</string>
+	<key>退出账号</key>
+	<string>退出账号</string>
+	<key>选择 CLI…</key>
+	<string>选择 CLI…</string>
+	<key>选择 Codex CLI 可执行文件</key>
+	<string>选择 Codex CLI 可执行文件</string>
+	<key>选择 Codex CLI…</key>
+	<string>选择 Codex CLI…</string>
+	<key>通知不可用。</key>
+	<string>通知不可用。</string>
+	<key>通知暂不可用，请重新开启提醒模式。</key>
+	<string>通知暂不可用，请重新开启提醒模式。</string>
+	<key>通知权限不可用。</key>
+	<string>通知权限不可用。</string>
+	<key>采样中，至少需要 10 分钟及 3 个采样点。</key>
+	<string>采样中，至少需要 10 分钟及 3 个采样点。</string>
+	<key>采样分段</key>
+	<string>采样分段</string>
+	<key>重新打开浏览器</key>
+	<string>重新打开浏览器</string>
+	<key>重新读取</key>
+	<string>重新读取</string>
+	<key>重置</key>
+	<string>重置</string>
+	<key>重置卡</key>
+	<string>重置卡</string>
+	<key>重置卡临期处理</key>
+	<string>重置卡临期处理</string>
+	<key>重置卡临期处理…</key>
+	<string>重置卡临期处理…</string>
+	<key>重置卡临期处理，%@</key>
+	<string>重置卡临期处理，%@</string>
+	<key>重置卡即将到期</key>
+	<string>重置卡即将到期</string>
+	<key>重置已完成。</key>
+	<string>重置已完成。</string>
+	<key>重置结果未知，请重试原重置操作。</key>
+	<string>重置结果未知，请重试原重置操作。</string>
+	<key>重置范围由服务器决定，可能包含其他额度窗口。</key>
+	<string>重置范围由服务器决定，可能包含其他额度窗口。</string>
+	<key>重试上次重置</key>
+	<string>重试上次重置</string>
+	<key>重试重置</key>
+	<string>重试重置</string>
+	<key>闪电</key>
+	<string>闪电</string>
+	<key>隐藏邮箱</key>
+	<string>隐藏邮箱</string>
+	<key>预测</key>
+	<string>预测</string>
+	<key>预测剩余</key>
+	<string>预测剩余</string>
+	<key>预测随使用强度变化，仅供参考。</key>
+	<string>预测随使用强度变化，仅供参考。</string>
+	<key>预计 %@后耗尽</key>
+	<string>预计 %@后耗尽</string>
+	<key>预计 %@后耗尽，比重置提前约 %@。</key>
+	<string>预计 %@后耗尽，比重置提前约 %@。</string>
+	<key>预计可用到本次重置</key>
+	<string>预计可用到本次重置</string>
+	<key>额度窗口</key>
+	<string>额度窗口</string>
+	<key>额度趋势</key>
+	<string>额度趋势</string>
+	<key>（已到期）</key>
+	<string>（已到期）</string>
+</dict>
+</plist>

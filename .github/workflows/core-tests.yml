@@ -17,6 +17,8 @@ jobs:
         run: swift --version
       - name: Test release notes validation
         run: python3 -m unittest discover -s scripts/tests -v
+      - name: Check generated localization resources
+        run: python3 scripts/compile-localizations.py --check
       - name: Run offline tests (no account or reset calls)
         run: swift test
 
@@ -33,6 +35,8 @@ jobs:
             -configuration Release -destination 'platform=macOS' \
             -derivedDataPath "$RUNNER_TEMP/CodexWatcherBuild" \
             CODE_SIGNING_ALLOWED=NO build
+      - name: Check extracted text has complete translations
+        run: python3 scripts/compile-localizations.py --check --stringsdata "$RUNNER_TEMP/CodexWatcherBuild/Build/Intermediates.noindex"
       - name: Check isolated English UI interactions
         run: python3 scripts/smoke-test-app.py "$RUNNER_TEMP/CodexWatcherBuild/Build/Products/Release/CodexWatcher.app" --language en
       - name: Check isolated Simplified Chinese UI interactions

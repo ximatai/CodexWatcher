@@ -403,7 +403,7 @@ private struct DashboardContent: View {
             }
             if let reset = window.quota.resetDate {
                 HStack(alignment: .firstTextBaseline) {
-                    Label(reset > date ? String(format: String(localized: "%@后重置"), format.duration(reset.timeIntervalSince(date))) : String(localized: "等待重置更新"),
+                    Label(reset > date ? L10n.text("\(format.duration(reset.timeIntervalSince(date)))后重置", locale: locale) : String(localized: "等待重置更新"),
                           systemImage: "arrow.clockwise")
                         .font(.system(size: 12, weight: .medium))
                     Spacer(minLength: 8)
@@ -454,7 +454,7 @@ private struct DashboardContent: View {
                 }
                 .buttonStyle(.plain).foregroundStyle(.secondary)
                 .help(monitor.expiryStatusTitle).accessibilityLabel("重置卡临期处理，\(monitor.expiryStatusTitle)")
-                Text(monitor.snapshot?.rateLimitResetCredits.map { String(format: String(localized: "%@ 张可用"), format.number(Double($0.availableCount))) } ?? String(localized: "信息未提供"))
+                Text(monitor.snapshot?.rateLimitResetCredits.map { L10n.text("\($0.availableCount) 张可用", locale: locale) } ?? String(localized: "信息未提供"))
                     .font(.caption).foregroundStyle(.secondary)
             }
             if monitor.expiryConfiguration.mode != .off {
@@ -518,7 +518,7 @@ private struct DashboardContent: View {
                     }
                 }
                 if let expiry = credit.expiryDate {
-                    Text(expiry > date ? String(format: String(localized: "%@ 到期"), format.compactDate(expiry)) : String(localized: "已到期，等待刷新"))
+                    Text(expiry > date ? L10n.text("\(format.compactDate(expiry)) 到期", locale: locale) : String(localized: "已到期，等待刷新"))
                         .foregroundStyle(.secondary)
                         .help(format.date(expiry, precise: true))
                 } else { Text("有效期未提供").foregroundStyle(.secondary) }
@@ -612,7 +612,7 @@ private struct DashboardContent: View {
                     Toggle(isOn: $privacyMode) { Label("隐藏邮箱", systemImage: "eye.slash") }
                     Picker("外观", selection: $appearance) {
                         ForEach(AppAppearance.allCases) { option in
-                            Text(LocalizedStringKey(option.title)).tag(option.rawValue)
+                            Text(option.title).tag(option.rawValue)
                         }
                     }
                     Divider()

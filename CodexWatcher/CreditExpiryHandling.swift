@@ -6,7 +6,9 @@ import Observation
 enum CreditExpiryMode: String, Codable, CaseIterable, Identifiable {
     case off, remind, automatic
     var id: String { rawValue }
-    var title: String {
+    var title: String { L10n.text(titleResource) }
+
+    var titleResource: String.LocalizationValue {
         switch self {
         case .off: return "关闭"
         case .remind: return "提醒后确认"

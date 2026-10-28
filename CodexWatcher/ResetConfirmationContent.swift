@@ -49,8 +49,8 @@ struct ResetConfirmationContent: View {
             .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(palette.separator))
 
             Text(isRetry
-                 ? "将重试原操作，同一请求标识用于避免重复消费。重置范围由服务器决定。"
-                 : "重置范围由服务器决定，可能包含其他额度窗口。")
+                 ? L10n.text("将重试原操作，同一请求标识用于避免重复消费。重置范围由服务器决定。")
+                 : L10n.text("重置范围由服务器决定，可能包含其他额度窗口。"))
                 .font(.system(size: 11)).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true).lineSpacing(3)
 

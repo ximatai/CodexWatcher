@@ -9,20 +9,20 @@ extension ReleaseUpdateChecker {
         switch result {
         case .available:
             guard let version = availableVersion else { return }
-            alert.messageText = "发现新版本 \(version.description)"
-            alert.addButton(withTitle: "前往下载")
-            alert.addButton(withTitle: "取消")
+            alert.messageText = L10n.text("发现新版本 \(version.description)")
+            alert.addButton(withTitle: L10n.text("前往下载"))
+            alert.addButton(withTitle: L10n.text("取消"))
         case .current:
-            alert.messageText = "已是最新版本"
-            alert.addButton(withTitle: "好")
+            alert.messageText = L10n.text("已是最新版本")
+            alert.addButton(withTitle: L10n.text("好"))
         case .rateLimited:
-            alert.messageText = "暂时无法检查更新"
-            alert.informativeText = "GitHub 请求受限，请稍后重试。"
-            alert.addButton(withTitle: "好")
+            alert.messageText = L10n.text("暂时无法检查更新")
+            alert.informativeText = L10n.text("GitHub 请求受限，请稍后重试。")
+            alert.addButton(withTitle: L10n.text("好"))
         default:
-            alert.messageText = "暂时无法检查更新"
-            alert.informativeText = "请检查网络连接后重试。"
-            alert.addButton(withTitle: "好")
+            alert.messageText = L10n.text("暂时无法检查更新")
+            alert.informativeText = L10n.text("请检查网络连接后重试。")
+            alert.addButton(withTitle: L10n.text("好"))
         }
         NSApp.activate(ignoringOtherApps: true)
         if alert.runModal() == .alertFirstButtonReturn, result == .available, let releaseURL {

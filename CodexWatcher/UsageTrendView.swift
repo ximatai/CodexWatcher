@@ -124,8 +124,7 @@ struct UsageTrendView: View {
         guard let forecast else { return String(localized: "正在积累数据") }
         guard let exhaustion = forecast.exhaustion else { return String(localized: "近期无消耗") }
         if let reset = quota.resetDate, exhaustion < reset {
-            return String(format: String(localized: "预计 %@后耗尽"),
-                          format.duration(max(0, exhaustion.timeIntervalSince(date))))
+            return L10n.text("预计 \(format.duration(max(0, exhaustion.timeIntervalSince(date))))后耗尽", locale: locale)
         }
         return String(localized: "预计可用到本次重置")
     }
@@ -133,8 +132,7 @@ struct UsageTrendView: View {
     private var secondarySummary: String? {
         guard let exhaustion = forecast?.exhaustion, let reset = quota.resetDate,
               exhaustion < reset else { return nil }
-        return String(format: String(localized: "早于重置约 %@"),
-                      format.duration(reset.timeIntervalSince(exhaustion)))
+        return L10n.text("早于重置约 \(format.duration(reset.timeIntervalSince(exhaustion)))", locale: locale)
     }
 
     private func legend(_ text: LocalizedStringKey, color: Color, dashed: Bool) -> some View {

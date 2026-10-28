@@ -39,9 +39,9 @@ struct MenuBarSettingsView: View {
                 Picker("图标", selection: $icon) {
                     ForEach(MenuBarIcon.allCases) { option in
                         if let symbol = option.symbol {
-                            Label(LocalizedStringKey(option.title), systemImage: symbol).tag(option.rawValue)
+                            Label(option.title, systemImage: symbol).tag(option.rawValue)
                         } else {
-                            Text(LocalizedStringKey(option.title)).tag(option.rawValue).disabled(textCount == 0)
+                            Text(option.title).tag(option.rawValue).disabled(textCount == 0)
                         }
                     }
                 }

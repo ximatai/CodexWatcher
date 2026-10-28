@@ -2,6 +2,8 @@
 
 本文件适用于整个仓库。发版细节见 [docs/RELEASING.md](docs/RELEASING.md)。
 
+国际化改动遵循 [docs/LOCALIZATION.md](docs/LOCALIZATION.md)，仅维护 String Catalog，勿手改生成资源。
+
 ## 发版顺序
 
 用户要求发布指定版本时，必须按以下顺序完成，不得先打 tag 再补记录：

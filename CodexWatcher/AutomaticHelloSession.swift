@@ -46,7 +46,7 @@ final class AutomaticHelloSession {
             if selected != nil || catalog.nextCursor == nil { break }
             cursor = catalog.nextCursor
         }
-        guard let selected else { throw WatcherError.message("未找到可用的默认文本模型，已跳过自动 hello。") }
+        guard let selected else { throw WatcherError.message(L10n.text("未找到可用的默认文本模型，已跳过自动 hello。")) }
         try checkActive()
         model = selected.model
         let order = ["none", "minimal", "low", "medium", "high", "xhigh"]
@@ -61,14 +61,14 @@ final class AutomaticHelloSession {
         try checkActive()
         guard response.modelProvider == "openai", response.thread.ephemeral == true,
               !response.thread.id.isEmpty else {
-            throw WatcherError.message("CLI 未提供独立临时会话，已跳过自动 hello。")
+            throw WatcherError.message(L10n.text("CLI 未提供独立临时会话，已跳过自动 hello。"))
         }
         threadID = response.thread.id
     }
 
     func sendHello(isAuthorized: () -> Bool) async throws {
         guard let threadID, let model, !disconnected, isAuthorized() else {
-            throw WatcherError.message("自动 hello 条件已变化，已停止。")
+            throw WatcherError.message(L10n.text("自动 hello 条件已变化，已停止。"))
         }
         var params: [String: Any] = [
             "threadId": threadID, "model": model, "serviceTierForTurn": "default",
@@ -82,7 +82,7 @@ final class AutomaticHelloSession {
         if let effort { params["effort"] = effort }
         let response: HelloTurnResponse = try await client.request("turn/start", params: params)
         let turn = response.turn
-        guard !turn.id.isEmpty else { throw WatcherError.message("自动 hello 回合标识无效。") }
+        guard !turn.id.isEmpty else { throw WatcherError.message(L10n.text("自动 hello 回合标识无效。")) }
         let deadline = Date().addingTimeInterval(completionTimeout)
         while !disconnected && Date() < deadline {
             // Start-response status is not a completion event. Buffering notifications
@@ -94,14 +94,14 @@ final class AutomaticHelloSession {
             try await Task.sleep(for: .milliseconds(50))
         }
         stop()
-        throw WatcherError.message("自动 hello 结果未确认。")
+        throw WatcherError.message(L10n.text("自动 hello 结果未确认。"))
     }
 
     func stop() { client.stop() }
 
     private func checkActive() throws {
         try Task.checkCancellation()
-        guard !disconnected else { throw WatcherError.message("自动 hello 已停止。") }
+        guard !disconnected else { throw WatcherError.message(L10n.text("自动 hello 已停止。")) }
     }
 
     private func receive(_ method: String, params: [String: Any]) {
