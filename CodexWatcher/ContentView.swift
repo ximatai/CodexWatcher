@@ -320,7 +320,12 @@ private struct DashboardContent: View {
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(palette.accent)
+                    .focusable()
                     .focused($usageControlFocused)
+                    .onKeyPress(.space, phases: .down) { _ in
+                        changeUsagePresentation(false)
+                        return .handled
+                    }
                     .focusEffectDisabled()
                     .onHover { hoveringReturnProgress = $0 }
                     .background {
@@ -358,7 +363,12 @@ private struct DashboardContent: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .focusable()
                 .focused($usageControlFocused)
+                .onKeyPress(.space, phases: .down) { _ in
+                    changeUsagePresentation(true)
+                    return .handled
+                }
                 .focusEffectDisabled()
                 .onHover { hoveringProgress = $0 }
                 .background {

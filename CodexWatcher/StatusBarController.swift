@@ -377,11 +377,19 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
               let restored = probe("quota-progress"), !restored.controlFocused, click(restored),
               await waitFor({ probe("quota-trend-return") != nil }) else { return fail() }
         closePopover()
-        showPopover(clearInitialFocus: true)
-        guard await waitFor({ probe("quota-progress") != nil && probe("quota-trend-return") == nil }),
-              let keyboardTarget = probe("quota-progress") else { return fail() }
+        // This open simulates keyboard use. Do not race its explicit focus request
+        // against the delegate's deferred mouse-open focus clearing on CI desktops.
+        showPopover(clearInitialFocus: false)
+        guard await waitFor({
+            self.popover.isShown && NSApp.isActive
+                && self.popover.contentViewController?.view.window?.isKeyWindow == true
+                && probe("quota-progress") != nil && probe("quota-trend-return") == nil
+        }), let keyboardTarget = probe("quota-progress") else { return fail() }
         keyboardTarget.requestControlFocus?()
-        guard await waitFor({ probe("quota-progress")?.controlFocused == true }) else { return fail() }
+        guard await waitFor({ probe("quota-progress")?.controlFocused == true }) else {
+            FileHandle.standardError.write(Data("Keyboard setup: active=\(NSApp.isActive), key=\(self.popover.contentViewController?.view.window?.isKeyWindow == true), fullKeyboard=\(NSApp.isFullKeyboardAccessEnabled), pendingMouseFocus=\(self.clearFocusAfterMouseOpen)\n".utf8))
+            return fail()
+        }
         // SwiftUI focus bindings publish before AppKit installs the responder.
         // Allow the short view transition to settle before posting a key event.
         try? await Task.sleep(for: .milliseconds(200))
