@@ -8,7 +8,7 @@ enum CreditExpiryMode: String, Codable, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String { L10n.text(titleResource) }
 
-    var titleResource: String.LocalizationValue {
+    private var titleResource: String.LocalizationValue {
         switch self {
         case .off: return "关闭"
         case .remind: return "提醒后确认"

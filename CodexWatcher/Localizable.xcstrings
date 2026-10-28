@@ -307,23 +307,6 @@
         }
       }
     },
-    "percentage points": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "pp"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "个百分点"
-          }
-        }
-      }
-    },
     "三天内": {
       "extractionState": "manual",
       "localizations": {
@@ -919,23 +902,6 @@
         }
       }
     },
-    "历史采样": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "History"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "历史采样"
-          }
-        }
-      }
-    },
     "原卡片状态或到期时间已变化，已停止自动重试。": {
       "extractionState": "manual",
       "localizations": {
@@ -1204,23 +1170,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "完成"
-          }
-        }
-      }
-    },
-    "实线表示历史采样，虚线表示近期趋势；淡色范围来自已观测的不同消耗速度，并非统计置信区间。中断采样或额度恢复后重新积累预测样本。": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Solid lines show history; dashed lines project recent usage. Shading reflects observed consumption speeds, not a statistical confidence interval. Sampling restarts after a gap or quota recovery."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "实线表示历史采样，虚线表示近期趋势；淡色范围来自已观测的不同消耗速度，并非统计置信区间。中断采样或额度恢复后重新积累预测样本。"
           }
         }
       }
@@ -1731,23 +1680,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "打开系统设置"
-          }
-        }
-      }
-    },
-    "按近期速度，预计可用到本次重置。": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "At the recent pace, quota should last until reset."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "按近期速度，预计可用到本次重置。"
           }
         }
       }
@@ -2704,23 +2636,6 @@
         }
       }
     },
-    "滞后": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Behind"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "滞后"
-          }
-        }
-      }
-    },
     "满额时发送一次 hello": {
       "extractionState": "manual",
       "localizations": {
@@ -3023,23 +2938,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "等待重置更新"
-          }
-        }
-      }
-    },
-    "纵轴为剩余额度 · 按最近一小时的消耗速度推算": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Remaining quota · Based on usage over the past hour"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "纵轴为剩余额度 · 按最近一小时的消耗速度推算"
           }
         }
       }
@@ -3486,40 +3384,6 @@
         }
       }
     },
-    "超前": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ahead"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "超前"
-          }
-        }
-      }
-    },
-    "趋势预测": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Forecast"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "趋势预测"
-          }
-        }
-      }
-    },
     "跟随系统": {
       "extractionState": "manual",
       "localizations": {
@@ -3567,23 +3431,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "近期无消耗"
-          }
-        }
-      }
-    },
-    "近期未观测到额度消耗，暂不预测耗尽时间。": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No recent consumption observed. Exhaustion time unavailable."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "近期未观测到额度消耗，暂不预测耗尽时间。"
           }
         }
       }
@@ -3754,23 +3601,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "通知权限不可用。"
-          }
-        }
-      }
-    },
-    "采样中，至少需要 10 分钟及 3 个采样点。": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Collecting data: at least 3 samples over 10 minutes needed."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "采样中，至少需要 10 分钟及 3 个采样点。"
           }
         }
       }
@@ -4047,23 +3877,6 @@
         }
       }
     },
-    "预测随使用强度变化，仅供参考。": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Estimates change with usage and are for reference only."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "预测随使用强度变化，仅供参考。"
-          }
-        }
-      }
-    },
     "预计 %@后耗尽": {
       "extractionState": "manual",
       "localizations": {
@@ -4077,23 +3890,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "预计 %@后耗尽"
-          }
-        }
-      }
-    },
-    "预计 %@后耗尽，比重置提前约 %@。": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Estimated exhaustion in %@, about %@ before reset."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "预计 %@后耗尽，比重置提前约 %@。"
           }
         }
       }
@@ -4128,23 +3924,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "额度窗口"
-          }
-        }
-      }
-    },
-    "额度趋势": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Quota trend"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "额度趋势"
           }
         }
       }

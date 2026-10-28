@@ -6,7 +6,7 @@ enum AppAppearance: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String { L10n.text(titleResource) }
 
-    var titleResource: String.LocalizationValue {
+    private var titleResource: String.LocalizationValue {
         switch self {
         case .system: return "跟随系统"
         case .light: return "亮色"

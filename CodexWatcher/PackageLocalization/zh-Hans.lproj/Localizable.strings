@@ -48,8 +48,6 @@
 	<string>hello 已完成</string>
 	<key>hello 已完成，最新额度暂未读取成功。</key>
 	<string>hello 已完成，最新额度暂未读取成功。</string>
-	<key>percentage points</key>
-	<string>个百分点</string>
 	<key>三天内</key>
 	<string>三天内</string>
 	<key>上次选择的重置卡</key>
@@ -126,8 +124,6 @@
 	<string>历史</string>
 	<key>历史数据已恢复，正在重新采样</key>
 	<string>历史数据已恢复，正在重新采样</string>
-	<key>历史采样</key>
-	<string>历史采样</string>
 	<key>原卡片状态或到期时间已变化，已停止自动重试。</key>
 	<string>原卡片状态或到期时间已变化，已停止自动重试。</string>
 	<key>原额度窗口不可用</key>
@@ -160,8 +156,6 @@
 	<string>安装帮助</string>
 	<key>完成</key>
 	<string>完成</string>
-	<key>实线表示历史采样，虚线表示近期趋势；淡色范围来自已观测的不同消耗速度，并非统计置信区间。中断采样或额度恢复后重新积累预测样本。</key>
-	<string>实线表示历史采样，虚线表示近期趋势；淡色范围来自已观测的不同消耗速度，并非统计置信区间。中断采样或额度恢复后重新积累预测样本。</string>
 	<key>实际用量减去参考进度，pp 表示百分点。</key>
 	<string>实际用量减去参考进度，pp 表示百分点。</string>
 	<key>实际用量减去参考进度，单位为百分点。</key>
@@ -222,8 +216,6 @@
 	<string>打开确认页</string>
 	<key>打开系统设置</key>
 	<string>打开系统设置</string>
-	<key>按近期速度，预计可用到本次重置。</key>
-	<string>按近期速度，预计可用到本次重置。</string>
 	<key>按额度周期的自然时间计算，包含睡眠和休息时间。</key>
 	<string>按额度周期的自然时间计算，包含睡眠和休息时间。</string>
 	<key>提醒后确认</key>
@@ -342,8 +334,6 @@
 	<string>消耗滞后</string>
 	<key>消耗超前</key>
 	<string>消耗超前</string>
-	<key>滞后</key>
-	<string>滞后</string>
 	<key>满额时发送一次 hello</key>
 	<string>满额时发送一次 hello</string>
 	<key>满额自动 hello</key>
@@ -380,8 +370,6 @@
 	<string>等待浏览器完成登录…</string>
 	<key>等待重置更新</key>
 	<string>等待重置更新</string>
-	<key>纵轴为剩余额度 · 按最近一小时的消耗速度推算</key>
-	<string>纵轴为剩余额度 · 按最近一小时的消耗速度推算</string>
 	<key>自动 hello 回合标识无效。</key>
 	<string>自动 hello 回合标识无效。</string>
 	<key>自动 hello 已停止。</key>
@@ -442,10 +430,6 @@
 	<string>账号已变化，请重新设置。</string>
 	<key>账号或额度窗口已变化，请重新开启。</key>
 	<string>账号或额度窗口已变化，请重新开启。</string>
-	<key>超前</key>
-	<string>超前</string>
-	<key>趋势预测</key>
-	<string>趋势预测</string>
 	<key>跟随系统</key>
 	<string>跟随系统</string>
 	<key>较参考进度</key>
@@ -456,8 +440,6 @@
 	<string>较慢消耗</string>
 	<key>近期无消耗</key>
 	<string>近期无消耗</string>
-	<key>近期未观测到额度消耗，暂不预测耗尽时间。</key>
-	<string>近期未观测到额度消耗，暂不预测耗尽时间。</string>
 	<key>返回进度</key>
 	<string>返回进度</string>
 	<key>连接已关闭。</key>
@@ -480,8 +462,6 @@
 	<string>通知暂不可用，请重新开启提醒模式。</string>
 	<key>通知权限不可用。</key>
 	<string>通知权限不可用。</string>
-	<key>采样中，至少需要 10 分钟及 3 个采样点。</key>
-	<string>采样中，至少需要 10 分钟及 3 个采样点。</string>
 	<key>采样分段</key>
 	<string>采样分段</string>
 	<key>重新打开浏览器</key>
@@ -518,18 +498,12 @@
 	<string>预测</string>
 	<key>预测剩余</key>
 	<string>预测剩余</string>
-	<key>预测随使用强度变化，仅供参考。</key>
-	<string>预测随使用强度变化，仅供参考。</string>
 	<key>预计 %@后耗尽</key>
 	<string>预计 %@后耗尽</string>
-	<key>预计 %@后耗尽，比重置提前约 %@。</key>
-	<string>预计 %@后耗尽，比重置提前约 %@。</string>
 	<key>预计可用到本次重置</key>
 	<string>预计可用到本次重置</string>
 	<key>额度窗口</key>
 	<string>额度窗口</string>
-	<key>额度趋势</key>
-	<string>额度趋势</string>
 	<key>（已到期）</key>
 	<string>（已到期）</string>
 </dict>

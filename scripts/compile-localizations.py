@@ -58,10 +58,8 @@ def main():
             return {p.relative_to(directory): plistlib.loads(subprocess.check_output(
                 ['plutil', '-convert', 'xml1', '-o', '-', str(p)]))
                 for p in directory.rglob('*') if p.is_file()}
-        expected = contents(temporary)
-        actual = contents(OUTPUT)
         if args.check:
-            if expected != actual:
+            if contents(temporary) != contents(OUTPUT):
                 parser.exit(1, 'Generated localization resources are stale. Run python3 scripts/compile-localizations.py\n')
         else:
             if OUTPUT.exists():

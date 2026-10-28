@@ -5,7 +5,7 @@ enum MenuBarIcon: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String { L10n.text(titleResource) }
 
-    var titleResource: String.LocalizationValue {
+    private var titleResource: String.LocalizationValue {
         switch self {
         case .gauge: return "仪表盘"
         case .chart: return "用量图表"
