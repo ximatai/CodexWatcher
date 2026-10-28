@@ -31,6 +31,10 @@ struct PresentationFormat {
         return nil
     }
 
+    func creditExpiryTitle(_ urgency: CreditExpiryUrgency) -> String {
+        text(urgency.title)
+    }
+
     private func text(_ key: String) -> String {
         #if SWIFT_PACKAGE
         let resources = Bundle.module

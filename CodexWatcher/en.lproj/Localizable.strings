@@ -159,3 +159,16 @@
 "正在更新，请稍候。" = "Updating, please wait.";
 "用量已失效，请取消并刷新。" = "Usage is stale; cancel and refresh.";
 "当前不可用，请取消并刷新。" = "Currently unavailable; cancel and refresh.";
+
+/* Dynamic presentation labels */
+"今日到期" = "Expires today";
+"明日到期" = "Expires tomorrow";
+"三天内" = "Within 3 days";
+"仪表盘" = "Gauge";
+"用量图表" = "Usage chart";
+"闪电" = "Bolt";
+"圆环" = "Ring";
+"无图标" = "No icon";
+"跟随系统" = "System";
+"亮色" = "Light";
+"暗色" = "Dark";

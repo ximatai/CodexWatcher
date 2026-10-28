@@ -38,11 +38,15 @@ final class WatcherAppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         if Self.smokeRoot != nil {
-            UserDefaults.standard.setVolatileDomain([
+            // Preserve per-process language arguments used by bilingual smoke checks.
+            var preferences = UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)
+            let fixturePreferences: [String: Any] = [
                 "appearance": "system", "privacyMode": false,
                 "menuBarIcon": "gauge", "menuBarShowUsage": true,
                 "menuBarShowTimeProgress": false, "menuBarShowDeviation": false
-            ], forName: UserDefaults.argumentDomain)
+            ]
+            preferences.merge(fixturePreferences) { _, fixture in fixture }
+            UserDefaults.standard.setVolatileDomain(preferences, forName: UserDefaults.argumentDomain)
         }
         let saved = UserDefaults.standard.string(forKey: "appearance") ?? AppAppearance.system.rawValue
         (AppAppearance(rawValue: saved) ?? .system).apply(to: NSApplication.shared)

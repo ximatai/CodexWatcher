@@ -27,9 +27,13 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Show Xcode toolchain
         run: xcodebuild -version
-      - name: Build macOS application without signing or launching
+      - name: Build macOS application without signing
         run: |
           xcodebuild -project CodexWatcher.xcodeproj -scheme CodexWatcher \
             -configuration Release -destination 'platform=macOS' \
             -derivedDataPath "$RUNNER_TEMP/CodexWatcherBuild" \
             CODE_SIGNING_ALLOWED=NO build
+      - name: Check isolated English UI interactions
+        run: python3 scripts/smoke-test-app.py "$RUNNER_TEMP/CodexWatcherBuild/Build/Products/Release/CodexWatcher.app" --language en
+      - name: Check isolated Simplified Chinese UI interactions
+        run: python3 scripts/smoke-test-app.py "$RUNNER_TEMP/CodexWatcherBuild/Build/Products/Release/CodexWatcher.app" --language zh-Hans

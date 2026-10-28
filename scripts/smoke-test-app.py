@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
 """Check the packaged app with a read-only fixture; optional second argument exports layout previews."""
+import argparse
 import json
 import os
 import shutil
 from pathlib import Path
 import subprocess
-import sys
 import tempfile
 import time
 
-app = Path(sys.argv[1]).resolve()
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('app', type=Path)
+parser.add_argument('previews', nargs='?', type=Path)
+parser.add_argument('--language', choices=('en', 'zh-Hans'))
+args = parser.parse_args()
+app = args.app.resolve()
 with tempfile.TemporaryDirectory(prefix='WatcherSmoke-') as directory:
     root = Path(directory)
     fake = root / 'fake-codex'
@@ -41,7 +46,11 @@ done
     environment = {key: value for key, value in os.environ.items()
                    if key in ('HOME', 'USER', 'LOGNAME', 'TMPDIR', 'PATH', 'LANG')}
     environment['WATCHER_SMOKE_ROOT'] = directory
-    subprocess.run([str(app / 'Contents/MacOS/CodexWatcher'), '--release-smoke-test'],
+    command = [str(app / 'Contents/MacOS/CodexWatcher'), '--release-smoke-test']
+    if args.language:
+        command += ['-AppleLanguages', f'({args.language})', '-AppleLocale',
+                    'en_US' if args.language == 'en' else 'zh_CN']
+    subprocess.run(command,
                    env=environment, timeout=60, check=True, stdout=subprocess.DEVNULL)
     report = root / 'result.txt'
     if not report.exists() or report.read_text() != 'passed\n':
@@ -50,8 +59,8 @@ done
     allowed = {'initialize', 'initialized', 'account/read', 'account/rateLimits/read'}
     if set(methods) != allowed:
         raise SystemExit('Smoke fixture received unexpected requests')
-    if len(sys.argv) > 2:
-        previews = Path(sys.argv[2]).resolve()
+    if args.previews:
+        previews = args.previews.resolve()
         previews.mkdir(parents=True, exist_ok=True)
         for preview in root.glob('popover-cards-*.png'):
             shutil.copy2(preview, previews / preview.name)

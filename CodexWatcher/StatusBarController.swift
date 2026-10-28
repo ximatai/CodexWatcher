@@ -466,7 +466,7 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
                 object: nil, queue: .main) { [weak self] notification in
                 MainActor.assumeIsolated {
                     guard let menu = notification.object as? NSMenu, !probe.sawMenu,
-                          menu.items.contains(where: { $0.title == "状态栏显示…" }) else { return }
+                          menu.items.contains(where: { $0.title == String(localized: "状态栏显示…") }) else { return }
                     probe.sawMenu = true
                     if cycle == 1 { self?.handleOtherApplicationActivation() }
                     if cycle == 2, let window = self?.popover.contentViewController?.view.window {
@@ -516,9 +516,9 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
         // Exercise SwiftUI menu actions as well as menu tracking. A hidden attached
         // sheet may allow performClick while blocking real mouse delivery entirely.
         let pages: [(String, () -> NSWindow?)] = [
-            ("状态栏显示…", { self.settingsWindow }),
-            ("重置卡临期处理…", { self.expirySettingsWindow }),
-            ("满额自动 hello…", { self.helloSettingsWindow })
+            (String(localized: "状态栏显示…"), { self.settingsWindow }),
+            (String(localized: "重置卡临期处理…"), { self.expirySettingsWindow }),
+            (String(localized: "满额自动 hello…"), { self.helloSettingsWindow })
         ]
         for (title, destination) in pages {
             showPopover(clearInitialFocus: true)

@@ -467,7 +467,7 @@ private struct DashboardContent: View {
                 }.font(.caption).foregroundStyle(.secondary)
             }
             if monitor.pendingRedemption != nil {
-                statusMessage("上次重置结果未确认", symbol: "exclamationmark.circle", color: palette.warning)
+                statusMessage(String(localized: "上次重置结果未确认"), symbol: "exclamationmark.circle", color: palette.warning)
                 Button("重试上次重置") {
                     showReset(monitor.makeResetConfirmation(for: nil))
                 }.disabled(monitor.isBusy)
@@ -509,7 +509,7 @@ private struct DashboardContent: View {
                         .lineLimit(1)
                     if let urgency {
                         let color = palette.creditExpiryColor(urgency)
-                        Text(urgency.title)
+                        Text(format.creditExpiryTitle(urgency))
                             .font(.system(size: 10, weight: .medium))
                             .foregroundStyle(color)
                             .padding(.horizontal, 5).padding(.vertical, 2)
@@ -612,7 +612,7 @@ private struct DashboardContent: View {
                     Toggle(isOn: $privacyMode) { Label("隐藏邮箱", systemImage: "eye.slash") }
                     Picker("外观", selection: $appearance) {
                         ForEach(AppAppearance.allCases) { option in
-                            Text(option.title).tag(option.rawValue)
+                            Text(LocalizedStringKey(option.title)).tag(option.rawValue)
                         }
                     }
                     Divider()
