@@ -214,6 +214,8 @@ This runs even when quota is plentiful or unused. Consumed credits cannot be res
 	<string>Opens the confirmation page</string>
 	<key>打开系统设置</key>
 	<string>Open System Settings</string>
+	<key>按近一小时用量估算，阴影反映消耗速度差异，仅供参考。</key>
+	<string>Estimated from usage over the past hour. Shading reflects observed usage rates. For reference only.</string>
 	<key>按额度周期的自然时间计算，包含睡眠和休息时间。</key>
 	<string>Based on elapsed time in the quota window, including sleep and idle time.</string>
 	<key>提醒后确认</key>
@@ -298,8 +300,6 @@ This runs even when quota is plentiful or unused. Consumed credits cannot be res
 	<string>Review before using</string>
 	<key>查看额度趋势</key>
 	<string>View quota trend</string>
-	<key>根据最近一小时的消耗速度推算，至少需要 10 分钟及 3 个采样点。实线为历史，虚线为预测；淡色范围来自已观测的不同消耗速度，并非统计置信区间。预测随使用强度变化，仅供参考；中断采样或额度恢复后重新积累样本。</key>
-	<string>Based on usage over the past hour; requires at least 3 samples over 10 minutes. Solid lines show history; dashed lines show forecasts. Shading reflects observed speeds, not a confidence interval. Estimates change with usage. Sampling restarts after gaps or quota recovery.</string>
 	<key>检查更新…</key>
 	<string>Check for Updates…</string>
 	<key>正在发送…</key>

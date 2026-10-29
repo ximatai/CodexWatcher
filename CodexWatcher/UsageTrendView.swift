@@ -8,7 +8,7 @@ struct UsageTrendView: View {
     let stale: Bool
     let storageFailed: Bool
     var recoveredHistory = false
-    var headerAction: AnyView? = nil
+    var headerTitle: AnyView? = nil
     @Environment(\.locale) private var locale
     @Environment(\.timeZone) private var timeZone
     @Environment(\.colorScheme) private var colorScheme
@@ -28,11 +28,14 @@ struct UsageTrendView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("剩余额度趋势").font(.headline)
+                if let headerTitle {
+                    headerTitle
+                } else {
+                    Text("剩余额度趋势").font(.headline)
+                }
                 Spacer()
                 legend("历史", color: palette.accent, dashed: false)
                 legend("预测", color: palette.warning, dashed: true)
-                if let headerAction { headerAction.padding(.leading, 4) }
             }
             Chart {
                 ForEach(Array(history.enumerated()), id: \.offset) { _, sample in
@@ -108,7 +111,7 @@ struct UsageTrendView: View {
         .padding(12)
         .background(palette.surface, in: RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(palette.separator))
-        .help("根据最近一小时的消耗速度推算，至少需要 10 分钟及 3 个采样点。实线为历史，虚线为预测；淡色范围来自已观测的不同消耗速度，并非统计置信区间。预测随使用强度变化，仅供参考；中断采样或额度恢复后重新积累样本。")
+        .help("按近一小时用量估算，阴影反映消耗速度差异，仅供参考。")
     }
 
     private var warning: Bool {

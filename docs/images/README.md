@@ -10,7 +10,7 @@
 | [dashboard-dark.png](dashboard-dark.png) | 暗色面板 |
 | [dashboard-progress-hover-light.png](dashboard-progress-hover-light.png) | 全宽进度轴与向外延伸的悬停热区（亮色） |
 | [dashboard-progress-hover-dark.png](dashboard-progress-hover-dark.png) | 全宽进度轴与悬停热区（暗色） |
-| [dashboard-trend-full-light.png](dashboard-trend-full-light.png) | 点击进度区域切换后的趋势视图与重置卡（亮色，拉高窗口展示） |
+| [dashboard-trend-full-light.png](dashboard-trend-full-light.png) | 点击进度区域切换后的趋势视图与重置卡，点击左侧标题返回（亮色，拉高窗口展示） |
 | [dashboard-trend-full-dark.png](dashboard-trend-full-dark.png) | 切换后的趋势视图（暗色，拉高窗口展示） |
 | [usage-trend-light.png](usage-trend-light.png) | 剩余额度历史、走势范围与预测耗尽时间（亮色） |
 | [usage-trend-dark.png](usage-trend-dark.png) | 剩余额度历史与预测（暗色） |

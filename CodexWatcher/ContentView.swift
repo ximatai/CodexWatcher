@@ -305,12 +305,16 @@ private struct DashboardContent: View {
             if showingUsageTrend {
                 UsageTrendView(samples: monitor.trendHistory[window.id] ?? [], quota: window.quota,
                                date: date, stale: stale, storageFailed: monitor.trendStorageFailed,
-                               recoveredHistory: monitor.trendStorageRecovered, headerAction: AnyView(
+                               recoveredHistory: monitor.trendStorageRecovered, headerTitle: AnyView(
                     Button {
                         changeUsagePresentation(false)
                     } label: {
-                        Label("返回进度", systemImage: "arrow.left")
-                            .font(.system(size: 11, weight: .medium))
+                        HStack(spacing: 6) {
+                            Image(systemName: "arrow.left")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(palette.accent)
+                            Text("剩余额度趋势").font(.headline)
+                        }
                             .padding(.horizontal, 6).padding(.vertical, 5)
                             .background(hoveringReturnProgress ? palette.selectedSurface : .clear,
                                         in: RoundedRectangle(cornerRadius: 8))
@@ -319,7 +323,9 @@ private struct DashboardContent: View {
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .foregroundStyle(palette.accent)
+                    .foregroundStyle(.primary)
+                    .help("返回进度")
+                    .accessibilityHint("返回进度")
                     .focusable()
                     .focused($usageControlFocused)
                     .onKeyPress(.space, phases: .down) { _ in
