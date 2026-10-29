@@ -14,6 +14,7 @@
 | [dashboard-trend-full-dark.png](dashboard-trend-full-dark.png) | 切换后的趋势视图（暗色，拉高窗口展示） |
 | [usage-trend-light.png](usage-trend-light.png) | 剩余额度历史、走势范围与预测耗尽时间（亮色） |
 | [usage-trend-dark.png](usage-trend-dark.png) | 剩余额度历史与预测（暗色） |
+| [usage-trend-summary-row.png](usage-trend-summary-row.png) | 长时长预测摘要在 350 点宽度下单行展示；[英文预览](en/usage-trend-summary-row.png) |
 | [dashboard-pro-short-only.png](dashboard-pro-short-only.png) | Pro 仅返回短周期额度，不显示 7 天窗口 |
 | [menu-bar-settings.png](menu-bar-settings.png) | 状态栏设置与数值预览 |
 | [reset-confirmation.png](reset-confirmation.png) | 重置确认页 |

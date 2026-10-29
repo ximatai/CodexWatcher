@@ -82,14 +82,14 @@ struct PresentationFormat {
         text("\(number(value, decimals: 1, signed: signed)) percentage points")
     }
 
-    func duration(_ seconds: TimeInterval) -> String {
+    func duration(_ seconds: TimeInterval, compact: Bool = false) -> String {
         if seconds > 0 && seconds < 60 { return text("Less than a minute") }
         let formatter = DateComponentsFormatter()
         var calendar = Calendar.autoupdatingCurrent
         calendar.locale = locale
         calendar.timeZone = timeZone
         formatter.calendar = calendar
-        formatter.unitsStyle = .full
+        formatter.unitsStyle = compact ? .abbreviated : .full
         formatter.allowedUnits = [.day, .hour, .minute]
         formatter.maximumUnitCount = 2
         formatter.zeroFormattingBehavior = .dropAll

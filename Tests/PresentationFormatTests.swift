@@ -93,6 +93,16 @@ final class PresentationFormatTests: XCTestCase {
         XCTAssertTrue(format.deviation(8.4).contains("个百分点"))
     }
 
+    func testCompactDurationKeepsTwoUnitsAndSubminuteMeaning() {
+        for language in ["en_US", "zh_CN"] {
+            let format = PresentationFormat(locale: Locale(identifier: language), timeZone: shanghai)
+            let compact = format.duration(35 * 3600, compact: true)
+            XCTAssertTrue(compact.contains("1") && compact.contains("11"))
+            XCTAssertLessThanOrEqual(compact.count, format.duration(35 * 3600).count)
+            XCTAssertEqual(format.duration(30, compact: true), format.duration(30))
+        }
+    }
+
     func testDurationDoesNotTruncateFractionalHoursOrClaimZeroMinutes() {
         let format = PresentationFormat(locale: Locale(identifier: "zh_CN"), timeZone: shanghai)
         let quota = format.quotaDuration(90)

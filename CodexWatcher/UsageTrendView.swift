@@ -101,17 +101,32 @@ struct UsageTrendView: View {
             .padding(.top, 8)
             .accessibilityLabel("剩余额度趋势")
             .accessibilityValue([summary, secondarySummary].compactMap { $0 }.joined(separator: "，"))
-            Label(summary, systemImage: warning ? "exclamationmark.circle" : "chart.xyaxis.line")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(warning ? palette.warning : .secondary)
             if let secondarySummary {
-                Text(secondarySummary).font(.system(size: 11)).foregroundStyle(.secondary)
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        summaryLabel.fixedSize()
+                        Spacer(minLength: 0)
+                        Text(secondarySummary).font(.system(size: 11)).foregroundStyle(.secondary).fixedSize()
+                    }
+                    VStack(alignment: .trailing, spacing: 4) {
+                        summaryLabel.frame(maxWidth: .infinity, alignment: .leading)
+                        Text(secondarySummary).font(.system(size: 11)).foregroundStyle(.secondary)
+                    }
+                }
+            } else {
+                summaryLabel
             }
         }
         .padding(12)
         .background(palette.surface, in: RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(palette.separator))
         .help("按近一小时用量估算，阴影反映消耗速度差异，仅供参考。")
+    }
+
+    private var summaryLabel: some View {
+        Label(summary, systemImage: warning ? "exclamationmark.circle" : "chart.xyaxis.line")
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(warning ? palette.warning : .secondary)
     }
 
     private var warning: Bool {
@@ -127,7 +142,7 @@ struct UsageTrendView: View {
         guard let forecast else { return String(localized: "正在积累数据") }
         guard let exhaustion = forecast.exhaustion else { return String(localized: "近期无消耗") }
         if let reset = quota.resetDate, exhaustion < reset {
-            return L10n.text("预计 \(format.duration(max(0, exhaustion.timeIntervalSince(date))))后耗尽", locale: locale)
+            return L10n.text("约\(format.duration(max(0, exhaustion.timeIntervalSince(date)), compact: true))后耗尽", locale: locale)
         }
         return String(localized: "预计可用到本次重置")
     }
@@ -135,7 +150,7 @@ struct UsageTrendView: View {
     private var secondarySummary: String? {
         guard let exhaustion = forecast?.exhaustion, let reset = quota.resetDate,
               exhaustion < reset else { return nil }
-        return L10n.text("早于重置约 \(format.duration(reset.timeIntervalSince(exhaustion)))", locale: locale)
+        return L10n.text("比重置早\(format.duration(reset.timeIntervalSince(exhaustion), compact: true))", locale: locale)
     }
 
     private func legend(_ text: LocalizedStringKey, color: Color, dashed: Bool) -> some View {

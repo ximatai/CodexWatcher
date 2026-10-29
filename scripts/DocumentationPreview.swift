@@ -104,6 +104,20 @@ struct DocumentationPreview {
                 size: NSSize(width: 390, height: 330), dark: dark,
                 to: output.appendingPathComponent(dark ? "usage-trend-dark.png" : "usage-trend-light.png"))
         }
+        // Long durations exercise the summary row at normal and constrained widths.
+        let longReset = Date(timeIntervalSince1970: now + 149 * 3600)
+        let segment = UUID()
+        let longSamples = stride(from: -60, through: 0, by: 10).map { minute in
+            UsageTrendSample(date: Date(timeIntervalSince1970: now + Double(minute * 60)),
+                             remaining: 70 - Double(minute) / 30, reset: longReset, segment: segment)
+        }
+        for width in [390, 350, 280] {
+            try await render(UsageTrendView(samples: longSamples,
+                quota: QuotaWindow(usedPercent: 30, windowDurationMins: 10080, resetsAt: longReset.timeIntervalSince1970),
+                date: Date(timeIntervalSince1970: now), stale: false, storageFailed: false).padding(16),
+                size: NSSize(width: width, height: 300), dark: true,
+                to: output.appendingPathComponent("usage-trend-long-summary-\(width).png"))
+        }
         monitor.selectedWindowID = "codex.primary"
         for dark in [false, true] {
             defaults.set(dark ? "dark" : "light", forKey: "appearance")

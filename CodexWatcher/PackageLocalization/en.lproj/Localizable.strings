@@ -246,8 +246,6 @@ This runs even when quota is plentiful or unused. Consumed credits cannot be res
 	<string>Unable to open the browser. Check your default browser settings.</string>
 	<key>无法更新登录启动设置</key>
 	<string>Unable to Change Login Settings</string>
-	<key>早于重置约 %@</key>
-	<string>About %@ before reset</string>
 	<key>时间</key>
 	<string>Time</string>
 	<key>明日到期</key>
@@ -324,6 +322,8 @@ This runs even when quota is plentiful or unused. Consumed credits cannot be res
 	<string>Checks every 30 seconds. After sending, it re-triggers only after at least 1 additional percentage point of use and a return to full quota. Closing or restarting does not clear the dedup record; unknown results are not retried.</string>
 	<key>每 5 分钟刷新</key>
 	<string>Refreshes every 5 minutes</string>
+	<key>比重置早%@</key>
+	<string>%@ before reset</string>
 	<key>消耗 1 张 · 操作无法撤销</key>
 	<string>Consumes 1 credit · Cannot be undone</string>
 	<key>消耗 1 张并重置</key>
@@ -368,6 +368,8 @@ This runs even when quota is plentiful or unused. Consumed credits cannot be res
 	<string>Waiting for browser login…</string>
 	<key>等待重置更新</key>
 	<string>Waiting for reset update</string>
+	<key>约%@后耗尽</key>
+	<string>Empty in ~%@</string>
 	<key>自动 hello 回合标识无效。</key>
 	<string>The automatic hello turn identifier is invalid.</string>
 	<key>自动 hello 已停止。</key>
@@ -496,8 +498,6 @@ This runs even when quota is plentiful or unused. Consumed credits cannot be res
 	<string>Forecast</string>
 	<key>预测剩余</key>
 	<string>Forecast remaining</string>
-	<key>预计 %@后耗尽</key>
-	<string>Estimated exhaustion in %@</string>
 	<key>预计可用到本次重置</key>
 	<string>Expected to last until reset</string>
 	<key>额度窗口</key>
