@@ -41,11 +41,28 @@ final class MenuBarConfigurationTests: XCTestCase {
                        "40% · —% · —pp")
     }
 
+    func testRemainingPercentageIsIndependentAndKeepsLastKnownData() {
+        let format = PresentationFormat(locale: Locale(identifier: "en_US"))
+        var config = MenuBarConfiguration(icon: .none, showUsage: false, showRemaining: true)
+        XCTAssertEqual(config.title(quota: quota, at: date, format: format), "60%")
+        XCTAssertEqual(config.title(quota: quota, at: date, format: format, isStale: true), "60%")
+        XCTAssertEqual(config.title(quota: nil, at: date, format: format), "—%")
+        XCTAssertNil(config.effectiveSymbol)
+        for (used, expected) in [(0.0, "100%"), (100.0, "0%"), (110.0, "0%")] {
+            let boundary = QuotaWindow(usedPercent: used, windowDurationMins: 100, resetsAt: quota.resetsAt)
+            XCTAssertEqual(config.title(quota: boundary, at: date, format: format), expected)
+        }
+        config.showUsage = true
+        config.showTimeProgress = true
+        config.showDeviation = true
+        XCTAssertEqual(config.title(quota: quota, at: date, format: format), "40% · 60% · 25% · +15.0pp")
+    }
+
     @MainActor
     func testEveryIconAndTextCombinationKeepsVisibleMenuAccess() throws {
         for icon in MenuBarIcon.allCases {
-            for mask in 0..<8 {
-                let config = MenuBarConfiguration(icon: icon, showUsage: mask & 1 != 0,
+            for mask in 0..<16 {
+                let config = MenuBarConfiguration(icon: icon, showUsage: mask & 1 != 0, showRemaining: mask & 8 != 0,
                                                   showTimeProgress: mask & 2 != 0, showDeviation: mask & 4 != 0)
                 let title = config.title(quota: quota, at: date)
                 XCTAssertTrue(config.effectiveSymbol != nil || !title.isEmpty)

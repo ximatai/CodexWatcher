@@ -81,6 +81,7 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
         let config = MenuBarConfiguration(
             icon: MenuBarIcon(rawValue: defaults.string(forKey: "menuBarIcon") ?? "") ?? .gauge,
             showUsage: defaults.object(forKey: "menuBarShowUsage") as? Bool ?? true,
+            showRemaining: defaults.bool(forKey: "menuBarShowRemaining"),
             showTimeProgress: defaults.bool(forKey: "menuBarShowTimeProgress"),
             showDeviation: defaults.bool(forKey: "menuBarShowDeviation"))
         let quota = monitor.account == nil ? nil : monitor.selectedWindow?.quota
@@ -94,7 +95,7 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
         if let quota {
             let format = PresentationFormat()
             let deviation = isStale ? nil : quota.deviation(at: monitor.displayDate)
-            item.button?.setAccessibilityValue(L10n.text("已用 \(format.percent(quota.usedPercent))；参考进度 \(quota.standardPercent(at: monitor.displayDate).map { format.percent($0) } ?? L10n.text("未知"))；偏移 \(deviation.map { format.deviation($0) } ?? L10n.text("待更新"))"))
+            item.button?.setAccessibilityValue(L10n.text("已用 \(format.percent(quota.usedPercent))；剩余 \(format.percent(max(0, 100 - quota.usedPercent)))；参考进度 \(quota.standardPercent(at: monitor.displayDate).map { format.percent($0) } ?? L10n.text("未知"))；偏移 \(deviation.map { format.deviation($0) } ?? L10n.text("待更新"))"))
         } else {
             item.button?.setAccessibilityValue(L10n.text("暂无额度数据"))
         }
@@ -704,8 +705,7 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
         NSWorkspace.shared.open(URL(string: "https://github.com/ximatai/CodexWatcher/blob/main/docs/USAGE.md")!)
     }
     @objc private func showAbout() {
-        NSApp.activate(ignoringOtherApps: true)
-        NSApp.orderFrontStandardAboutPanel(nil)
+        AboutPanel.show()
     }
     @objc private func toggleEmailPrivacy() {
         let defaults = UserDefaults.standard

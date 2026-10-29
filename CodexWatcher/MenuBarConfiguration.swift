@@ -28,6 +28,7 @@ enum MenuBarIcon: String, CaseIterable, Identifiable {
 struct MenuBarConfiguration {
     var icon: MenuBarIcon = .gauge
     var showUsage = true
+    var showRemaining = false
     var showTimeProgress = false
     var showDeviation = false
 
@@ -35,6 +36,7 @@ struct MenuBarConfiguration {
                isStale: Bool = false) -> String {
         var parts: [String] = []
         if showUsage { parts.append(quota.map { format.percent($0.usedPercent) } ?? "—%") }
+        if showRemaining { parts.append(quota.map { format.percent(max(0, 100 - $0.usedPercent)) } ?? "—%") }
         if showTimeProgress {
             parts.append(quota?.standardPercent(at: date).map { format.percent($0) } ?? "—%")
         }
@@ -47,6 +49,6 @@ struct MenuBarConfiguration {
 
     // Preserve access even if preferences were edited externally into an empty label.
     var effectiveSymbol: String? {
-        icon.symbol ?? (!showUsage && !showTimeProgress && !showDeviation ? MenuBarIcon.gauge.symbol : nil)
+        icon.symbol ?? (!showUsage && !showRemaining && !showTimeProgress && !showDeviation ? MenuBarIcon.gauge.symbol : nil)
     }
 }

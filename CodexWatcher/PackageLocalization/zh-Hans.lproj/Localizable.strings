@@ -108,6 +108,8 @@
 	<string>前往下载</string>
 	<key>剩余 %@</key>
 	<string>剩余 %@</string>
+	<key>剩余百分比</key>
+	<string>剩余百分比</string>
 	<key>剩余额度</key>
 	<string>剩余额度</string>
 	<key>剩余额度趋势</key>
@@ -180,8 +182,8 @@
 	<string>已用</string>
 	<key>已用 %@ · 剩余 %@</key>
 	<string>已用 %@ · 剩余 %@</string>
-	<key>已用 %@；参考进度 %@；偏移 %@</key>
-	<string>已用 %@；参考进度 %@；偏移 %@</string>
+	<key>已用 %@；剩余 %@；参考进度 %@；偏移 %@</key>
+	<string>已用 %@；剩余 %@；参考进度 %@；偏移 %@</string>
 	<key>已用 %@；参考进度 %@；较参考进度 %@</key>
 	<string>已用 %@；参考进度 %@；较参考进度 %@</string>
 	<key>已用百分比</key>
@@ -262,6 +264,8 @@
 	<string>暂时无法检查更新</string>
 	<key>暗色</key>
 	<string>暗色</string>
+	<key>更多作品</key>
+	<string>更多作品</string>
 	<key>更新于 %@</key>
 	<string>更新于 %@</string>
 	<key>最新额度读取失败，请重新读取。</key>

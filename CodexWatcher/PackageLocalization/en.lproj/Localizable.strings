@@ -106,6 +106,8 @@ This runs even when quota is plentiful or unused. Consumed credits cannot be res
 	<string>Download</string>
 	<key>剩余 %@</key>
 	<string>%@ remaining</string>
+	<key>剩余百分比</key>
+	<string>Remaining percentage</string>
 	<key>剩余额度</key>
 	<string>Remaining quota</string>
 	<key>剩余额度趋势</key>
@@ -178,8 +180,8 @@ This runs even when quota is plentiful or unused. Consumed credits cannot be res
 	<string>Used</string>
 	<key>已用 %@ · 剩余 %@</key>
 	<string>Used %@ · Remaining %@</string>
-	<key>已用 %@；参考进度 %@；偏移 %@</key>
-	<string>Used %@; reference pace %@; deviation %@</string>
+	<key>已用 %@；剩余 %@；参考进度 %@；偏移 %@</key>
+	<string>Used %@; remaining %@; reference pace %@; deviation %@</string>
 	<key>已用 %@；参考进度 %@；较参考进度 %@</key>
 	<string>Used %@; reference pace %@; vs pace %@</string>
 	<key>已用百分比</key>
@@ -260,6 +262,8 @@ This runs even when quota is plentiful or unused. Consumed credits cannot be res
 	<string>Unable to Check for Updates</string>
 	<key>暗色</key>
 	<string>Dark</string>
+	<key>更多作品</key>
+	<string>More Apps</string>
 	<key>更新于 %@</key>
 	<string>Updated %@</string>
 	<key>最新额度读取失败，请重新读取。</key>

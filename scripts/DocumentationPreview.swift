@@ -141,8 +141,15 @@ struct DocumentationPreview {
         await monitor.waitForTrendPersistence()
         defaults.set("light", forKey: "appearance")
         try await render(MenuBarSettingsView(monitor: monitor).defaultAppStorage(defaults),
-                         size: NSSize(width: 380, height: 280), dark: false,
+                         size: NSSize(width: 380, height: 310), dark: false,
                          to: output.appendingPathComponent("menu-bar-settings.png"))
+        defaults.set(false, forKey: "menuBarShowUsage")
+        defaults.set(true, forKey: "menuBarShowRemaining")
+        try await render(MenuBarSettingsView(monitor: monitor).defaultAppStorage(defaults),
+                         size: NSSize(width: 380, height: 310), dark: false,
+                         to: output.appendingPathComponent("menu-bar-remaining.png"))
+        defaults.set(true, forKey: "menuBarShowUsage")
+        defaults.set(false, forKey: "menuBarShowRemaining")
         let resetStore = ResetAttemptStore(directory: temporary.appendingPathComponent("State"))
         let pending = try resetStore.prepareNew(creditID: "demo-card-1", owner: "documentation-demo")!
         await monitor.refresh()

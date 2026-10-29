@@ -648,7 +648,7 @@ private struct DashboardContent: View {
                             .disabled(updates.isChecking)
                     }
                     Button("使用帮助") { NSWorkspace.shared.open(URL(string: "https://github.com/ximatai/CodexWatcher/blob/main/docs/USAGE.md")!) }
-                    Button("关于 Codex Watcher") { NSApp.orderFrontStandardAboutPanel(nil) }
+                    Button("关于 Codex Watcher") { AboutPanel.show() }
                 } label: {
                     Image(systemName: "gearshape").font(.system(size: 14)).foregroundStyle(.secondary)
                 }

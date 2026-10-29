@@ -6,14 +6,15 @@ struct MenuBarSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @AppStorage("menuBarIcon") private var icon = MenuBarIcon.gauge.rawValue
     @AppStorage("menuBarShowUsage") private var showUsage = true
+    @AppStorage("menuBarShowRemaining") private var showRemaining = false
     @AppStorage("menuBarShowTimeProgress") private var showTimeProgress = false
     @AppStorage("menuBarShowDeviation") private var showDeviation = false
 
     private var configuration: MenuBarConfiguration {
-        .init(icon: MenuBarIcon(rawValue: icon) ?? .gauge, showUsage: showUsage,
+        .init(icon: MenuBarIcon(rawValue: icon) ?? .gauge, showUsage: showUsage, showRemaining: showRemaining,
               showTimeProgress: showTimeProgress, showDeviation: showDeviation)
     }
-    private var textCount: Int { [showUsage, showTimeProgress, showDeviation].filter { $0 }.count }
+    private var textCount: Int { [showUsage, showRemaining, showTimeProgress, showDeviation].filter { $0 }.count }
     private var previewTitle: String {
         configuration.title(quota: monitor.account == nil ? nil : monitor.selectedWindow?.quota,
                             at: monitor.displayDate,
@@ -48,6 +49,8 @@ struct MenuBarSettingsView: View {
                 Divider().padding(.vertical, 4)
                 Toggle("已用百分比", isOn: $showUsage)
                     .disabled(icon == MenuBarIcon.none.rawValue && showUsage && textCount == 1)
+                Toggle("剩余百分比", isOn: $showRemaining)
+                    .disabled(icon == MenuBarIcon.none.rawValue && showRemaining && textCount == 1)
                 Toggle("参考进度", isOn: $showTimeProgress)
                     .help("按额度周期的自然时间计算，包含睡眠和休息时间。")
                     .disabled(icon == MenuBarIcon.none.rawValue && showTimeProgress && textCount == 1)

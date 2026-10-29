@@ -17,6 +17,7 @@
 | [usage-trend-summary-row.png](usage-trend-summary-row.png) | 长时长预测摘要在 350 点宽度下单行展示；[英文预览](en/usage-trend-summary-row.png) |
 | [dashboard-pro-short-only.png](dashboard-pro-short-only.png) | Pro 仅返回短周期额度，不显示 7 天窗口 |
 | [menu-bar-settings.png](menu-bar-settings.png) | 状态栏设置与数值预览 |
+| [menu-bar-remaining.png](menu-bar-remaining.png) | 仅显示剩余百分比的配置与预览 |
 | [reset-confirmation.png](reset-confirmation.png) | 重置确认页 |
 | [credit-expiry-reminder.png](credit-expiry-reminder.png) | 临期处理的提醒模式 |
 | [credit-expiry-automatic.png](credit-expiry-automatic.png) | 临期处理的自动模式 |

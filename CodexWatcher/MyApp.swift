@@ -42,7 +42,7 @@ final class WatcherAppDelegate: NSObject, NSApplicationDelegate {
             var preferences = UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)
             let fixturePreferences: [String: Any] = [
                 "appearance": "system", "privacyMode": false,
-                "menuBarIcon": "gauge", "menuBarShowUsage": true,
+                "menuBarIcon": "gauge", "menuBarShowUsage": true, "menuBarShowRemaining": false,
                 "menuBarShowTimeProgress": false, "menuBarShowDeviation": false
             ]
             preferences.merge(fixturePreferences) { _, fixture in fixture }
