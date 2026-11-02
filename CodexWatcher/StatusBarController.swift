@@ -393,12 +393,17 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
         // Use real hit testing and Space events; preferences belong to a disposable suite.
         guard let eight = probe("forecast-window-8"), click(eight),
               await waitFor({ probe("forecast-window-8")?.controlSelected == true
+                  && probe("forecast-window-8")?.controlFocused == false
                   && self.viewDefaults.integer(forKey: "trendForecastWindowHours") == 8 }),
               let day = probe("forecast-window-24") else { return fail() }
+        // Check after AppKit's deferred focus update, not only the click callback.
+        try? await Task.sleep(for: .milliseconds(200))
+        guard probe("forecast-window-8")?.controlFocused == false else { return fail() }
         day.requestControlFocus?()
         guard await waitFor({ probe("forecast-window-24")?.controlFocused == true }) else { return fail() }
         try? await Task.sleep(for: .milliseconds(200))
         guard space(), await waitFor({ probe("forecast-window-24")?.controlSelected == true
+            && probe("forecast-window-24")?.controlFocused == true
             && self.viewDefaults.integer(forKey: "trendForecastWindowHours") == 24 }),
               let smokeDefaultsName, viewDefaults.synchronize() else { return fail() }
         let persisted = Process()
@@ -417,7 +422,8 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
               let reopened = probe("quota-progress"), click(reopened),
               await waitFor({ probe("forecast-window-24")?.controlSelected == true }),
               let hour = probe("forecast-window-1"), click(hour),
-              await waitFor({ probe("forecast-window-1")?.controlSelected == true }) else { return fail() }
+              await waitFor({ probe("forecast-window-1")?.controlSelected == true
+                  && probe("forecast-window-1")?.controlFocused == false }) else { return fail() }
         FileHandle.standardError.write(Data("Forecast windows: click, keyboard Space, persisted preference and reopen passed\n".utf8))
         closePopover()
         // This open simulates keyboard use. Do not race its explicit focus request

@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import Charts
 
 struct UsageTrendView: View {
@@ -45,6 +46,14 @@ struct UsageTrendView: View {
                 ForEach(UsageTrendWindow.allCases, id: \.rawValue) { window in
                     Button {
                         forecastWindowHours = window.rawValue
+                        if NSApp.currentEvent?.type == .leftMouseUp || NSApp.currentEvent?.type == .leftMouseDown {
+                            focusedWindow = nil
+                            // AppKit may install pointer focus after the button action.
+                            Task { @MainActor in
+                                await Task.yield()
+                                if focusedWindow == window { focusedWindow = nil }
+                            }
+                        }
                     } label: {
                         Text(L10n.text(window.title, locale: locale))
                             .font(.system(size: 11, weight: .medium))
@@ -53,11 +62,18 @@ struct UsageTrendView: View {
                             .overlay(alignment: .bottom) {
                                 Rectangle().fill(forecastWindow == window ? palette.accent : .clear).frame(height: 1)
                             }
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 5)
+                                    .strokeBorder(focusedWindow == window ? palette.accent.opacity(0.3) : .clear, lineWidth: 0.75)
+                                    .padding(-3)
+                                    .allowsHitTesting(false)
+                            }
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .focusable()
                     .focused($focusedWindow, equals: window)
+                    .focusEffectDisabled()
                     .onKeyPress(.space, phases: .down) { _ in
                         forecastWindowHours = window.rawValue
                         return .handled
