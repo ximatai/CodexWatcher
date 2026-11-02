@@ -119,6 +119,33 @@ struct DocumentationPreview {
                 size: NSSize(width: width, height: 300), dark: true,
                 to: output.appendingPathComponent("usage-trend-long-summary-\(width).png"))
         }
+        // Cover long-window readiness and honest abstention with isolated fake history.
+        let daySegment = UUID()
+        let daySamples = stride(from: -24 * 60, through: 0, by: 5).map { minute -> UsageTrendSample in
+            let age = -Double(minute) / 60
+            let remaining = 39 + (age <= 8 ? age * 1.1 : 8.8 + (age - 8) * 0.4)
+            return UsageTrendSample(date: Date(timeIntervalSince1970: now + Double(minute * 60)),
+                                    remaining: remaining, reset: longReset, segment: daySegment)
+        }
+        defaults.set(24, forKey: "trendForecastWindowHours")
+        for (name, samples, used) in [("24h-ready", daySamples, 61.0), ("24h-collecting", longSamples, 30.0)] {
+            try await render(UsageTrendView(samples: samples,
+                quota: QuotaWindow(usedPercent: used, windowDurationMins: 10080, resetsAt: longReset.timeIntervalSince1970),
+                date: Date(timeIntervalSince1970: now), stale: false, storageFailed: false).defaultAppStorage(defaults).padding(16),
+                size: NSSize(width: 390, height: 330), dark: true,
+                to: output.appendingPathComponent("usage-trend-\(name).png"))
+        }
+        defaults.set(1, forKey: "trendForecastWindowHours")
+        let weakSegment = UUID()
+        let weakSamples = stride(from: -3600.0, through: 0, by: 30).map {
+            UsageTrendSample(date: Date(timeIntervalSince1970: now + $0), remaining: 41 - floor(($0 + 3600) / 1800),
+                             reset: longReset, segment: weakSegment)
+        }
+        try await render(UsageTrendView(samples: weakSamples,
+            quota: QuotaWindow(usedPercent: 61, windowDurationMins: 10080, resetsAt: longReset.timeIntervalSince1970),
+            date: Date(timeIntervalSince1970: now), stale: false, storageFailed: false).defaultAppStorage(defaults).padding(16),
+            size: NSSize(width: 390, height: 330), dark: true,
+            to: output.appendingPathComponent("usage-trend-weak-signal.png"))
         monitor.selectedWindowID = "codex.primary"
         for dark in [false, true] {
             defaults.set(dark ? "dark" : "light", forKey: "appearance")

@@ -4290,23 +4290,6 @@
         }
       }
     },
-    "预测窗口": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Forecast window"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "预测窗口"
-          }
-        }
-      }
-    },
     "1 小时": {
       "extractionState": "manual",
       "localizations": {
@@ -4358,19 +4341,87 @@
         }
       }
     },
-    "按最近%@内的可用采样估算，阴影反映消耗速度差异，仅供参考。": {
+    "正在积累%@数据": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Estimated from available samples in the past %@. Shading reflects observed usage rates. For reference only."
+            "value": "Collecting %@ of data"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "按最近%@内的可用采样估算，阴影反映消耗速度差异，仅供参考。"
+            "value": "正在积累%@数据"
+          }
+        }
+      }
+    },
+    "消耗变化太少，暂不预测": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Too little usage change to forecast"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "消耗变化太少，暂不预测"
+          }
+        }
+      }
+    },
+    "额度周期短于所选窗口": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quota period is shorter than this window"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "额度周期短于所选窗口"
+          }
+        }
+      }
+    },
+    "按%@等时采样估算；阴影为消耗情景范围，仅供参考。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estimated from equally spaced samples over %@. Shading shows usage scenarios, for reference only."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按%@等时采样估算；阴影为消耗情景范围，仅供参考。"
+          }
+        }
+      }
+    },
+    "参考时段": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reference period"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "参考时段"
           }
         }
       }

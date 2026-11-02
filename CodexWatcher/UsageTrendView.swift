@@ -10,8 +10,6 @@ struct UsageTrendView: View {
     let storageFailed: Bool
     var recoveredHistory = false
     var headerTitle: AnyView? = nil
-    @State private var hoveringWindow: UsageTrendWindow?
-    @FocusState private var focusedWindow: UsageTrendWindow?
     @AppStorage("trendForecastWindowHours") private var forecastWindowHours = UsageTrendWindow.hour.rawValue
     @Environment(\.locale) private var locale
     @Environment(\.timeZone) private var timeZone
@@ -20,17 +18,26 @@ struct UsageTrendView: View {
     private var format: PresentationFormat { PresentationFormat(locale: locale, timeZone: timeZone) }
     private var forecastWindow: UsageTrendWindow { UsageTrendWindow(rawValue: forecastWindowHours) ?? .hour }
     private var history: [UsageTrendSample] {
-        samples.filter { $0.reset == quota.resetDate }
+        samples.filter { sample in quota.resetDate.map { UsageTrend.sameReset(sample.reset, $0) } ?? false }
     }
-    private var forecast: UsageTrendForecast? {
-        guard !stale, quota.usedPercent.isFinite, (0...100).contains(quota.usedPercent),
-              let last = history.last, abs(last.remaining - (100 - quota.usedPercent)) < 0.001 else { return nil }
-        return UsageTrend.forecast(samples: history, at: date, window: forecastWindow)
+    private var windowFitsQuota: Bool {
+        quota.windowDurationMins.map { $0 * 60 >= forecastWindow.lookback } ?? true
     }
-    private var start: Date { history.first?.date ?? date.addingTimeInterval(-forecastWindow.lookback) }
+    private func assessment(history: [UsageTrendSample]) -> UsageTrendAssessment {
+        guard !stale, windowFitsQuota, quota.usedPercent.isFinite, (0...100).contains(quota.usedPercent),
+              let last = history.last, abs(last.remaining - (100 - quota.usedPercent)) < 0.001 else { return .unavailable }
+        return UsageTrend.assess(samples: history, at: date, window: forecastWindow)
+    }
     private var end: Date { max(quota.resetDate ?? date, date.addingTimeInterval(60)) }
 
     var body: some View {
+        let history = history
+        let assessment = assessment(history: history)
+        let forecast = assessment.forecast
+        let start = history.first?.date ?? date.addingTimeInterval(-forecastWindow.lookback)
+        let summary = summary(assessment: assessment)
+        let secondarySummary = secondarySummary(forecast: forecast)
+        let warning = warning(forecast: forecast)
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 if let headerTitle {
@@ -42,57 +49,9 @@ struct UsageTrendView: View {
                 legend("历史", color: palette.accent, dashed: false)
                 legend("预测", color: palette.warning, dashed: true)
             }
-            HStack(spacing: 18) {
-                ForEach(UsageTrendWindow.allCases, id: \.rawValue) { window in
-                    Button {
-                        forecastWindowHours = window.rawValue
-                        if NSApp.currentEvent?.type == .leftMouseUp || NSApp.currentEvent?.type == .leftMouseDown {
-                            focusedWindow = nil
-                            // AppKit may install pointer focus after the button action.
-                            Task { @MainActor in
-                                await Task.yield()
-                                if focusedWindow == window { focusedWindow = nil }
-                            }
-                        }
-                    } label: {
-                        Text(L10n.text(window.title, locale: locale))
-                            .font(.system(size: 11, weight: .medium))
-                            .padding(.vertical, 5)
-                            .foregroundStyle(forecastWindow == window || hoveringWindow == window ? palette.accent : .secondary)
-                            .overlay(alignment: .bottom) {
-                                Rectangle().fill(forecastWindow == window ? palette.accent : .clear).frame(height: 1)
-                            }
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 5)
-                                    .strokeBorder(focusedWindow == window ? palette.accent.opacity(0.3) : .clear, lineWidth: 0.75)
-                                    .padding(-3)
-                                    .allowsHitTesting(false)
-                            }
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .focusable()
-                    .focused($focusedWindow, equals: window)
-                    .focusEffectDisabled()
-                    .onKeyPress(.space, phases: .down) { _ in
-                        forecastWindowHours = window.rawValue
-                        return .handled
-                    }
-                    .onHover { hoveringWindow = $0 ? window : nil }
-                    .accessibilityAddTraits(forecastWindow == window ? .isSelected : [])
-                    .background {
-                        if CommandLine.arguments.contains("--release-smoke-test") {
-                            UsageInteractionAnchor(name: "forecast-window-\(window.rawValue)",
-                                focused: focusedWindow == window,
-                                requestFocus: { focusedWindow = window }, selected: forecastWindow == window)
-                        }
-                    }
-                }
-            }
-            .accessibilityElement(children: .contain)
-            .accessibilityLabel("预测窗口")
+            TrendWindowPicker(forecastWindowHours: $forecastWindowHours)
             Chart {
-                ForEach(Array(history.enumerated()), id: \.offset) { _, sample in
+                ForEach(Array(UsageTrend.chartSamples(history).enumerated()), id: \.offset) { _, sample in
                     LineMark(x: .value("时间", sample.date), y: .value("剩余额度", sample.remaining),
                              series: .value("采样分段", sample.segment.uuidString))
                         .foregroundStyle(palette.accent)
@@ -101,12 +60,17 @@ struct UsageTrendView: View {
                         .foregroundStyle(palette.accent).symbolSize(8)
                 }
                 if let forecast {
-                    ForEach(0..<25, id: \.self) { index in
-                        let point = forecast.anchor.date.addingTimeInterval(end.timeIntervalSince(forecast.anchor.date) * Double(index) / 24)
-                        AreaMark(x: .value("时间", point),
-                                 yStart: .value("较快消耗", forecast.remaining(at: point, rate: forecast.fastRate)),
-                                 yEnd: .value("较慢消耗", forecast.remaining(at: point, rate: forecast.slowRate)))
-                            .foregroundStyle(palette.warning.opacity(0.10))
+                    if let scenarioEnd = forecast.scenarioEnd(window: forecastWindow) {
+                        ForEach(0..<25, id: \.self) { index in
+                            let point = forecast.anchor.date.addingTimeInterval(scenarioEnd.timeIntervalSince(forecast.anchor.date) * Double(index) / 24)
+                            AreaMark(x: .value("时间", point),
+                                     yStart: .value("较快消耗", forecast.remaining(at: point, rate: forecast.fastRate)),
+                                     yEnd: .value("较慢消耗", forecast.remaining(at: point, rate: forecast.slowRate)))
+                                .foregroundStyle(LinearGradient(
+                                    colors: [palette.warning.opacity(0.12), palette.warning.opacity(0)],
+                                    startPoint: .leading, endPoint: .trailing))
+                                .alignsMarkStylesWithPlotArea(false)
+                        }
                     }
                     let finish = min(end, forecast.exhaustion ?? end)
                     ForEach([forecast.anchor.date, finish], id: \.self) { point in
@@ -158,41 +122,47 @@ struct UsageTrendView: View {
             if let secondarySummary {
                 ViewThatFits(in: .horizontal) {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        summaryLabel.fixedSize()
+                        summaryLabel(summary, warning: warning).fixedSize()
                         Spacer(minLength: 0)
                         Text(secondarySummary).font(.system(size: 11)).foregroundStyle(.secondary).fixedSize()
                     }
                     VStack(alignment: .trailing, spacing: 4) {
-                        summaryLabel.frame(maxWidth: .infinity, alignment: .leading)
+                        summaryLabel(summary, warning: warning).frame(maxWidth: .infinity, alignment: .leading)
                         Text(secondarySummary).font(.system(size: 11)).foregroundStyle(.secondary)
                     }
                 }
             } else {
-                summaryLabel
+                summaryLabel(summary, warning: warning)
             }
         }
         .padding(12)
         .background(palette.surface, in: RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(palette.separator))
-        .help(L10n.text("按最近\(L10n.text(forecastWindow.title, locale: locale))内的可用采样估算，阴影反映消耗速度差异，仅供参考。", locale: locale))
+        .help(L10n.text("按\(L10n.text(forecastWindow.title, locale: locale))等时采样估算；阴影为消耗情景范围，仅供参考。", locale: locale))
     }
 
-    private var summaryLabel: some View {
+    private func summaryLabel(_ summary: String, warning: Bool) -> some View {
         Label(summary, systemImage: warning ? "exclamationmark.circle" : "chart.xyaxis.line")
             .font(.system(size: 12, weight: .medium))
             .foregroundStyle(warning ? palette.warning : .secondary)
     }
 
-    private var warning: Bool {
+    private func warning(forecast: UsageTrendForecast?) -> Bool {
         guard let exhaustion = forecast?.exhaustion, let reset = quota.resetDate else { return false }
         return exhaustion < reset
     }
 
-    private var summary: String {
+    private func summary(assessment: UsageTrendAssessment) -> String {
+        let forecast = assessment.forecast
         if storageFailed { return String(localized: "无法保存趋势数据，请检查本地存储。") }
         if stale { return String(localized: "数据待更新，预测已暂停。") }
         if recoveredHistory { return String(localized: "历史数据已恢复，正在重新采样") }
         if quota.usedPercent >= 100 { return String(localized: "当前额度已耗尽，等待重置。") }
+        if !windowFitsQuota { return L10n.text("额度周期短于所选窗口") }
+        if case .insufficientCoverage = assessment {
+            return L10n.text("正在积累\(L10n.text(forecastWindow.title, locale: locale))数据", locale: locale)
+        }
+        if case .insufficientSignal = assessment { return L10n.text("消耗变化太少，暂不预测") }
         guard let forecast else { return String(localized: "正在积累数据") }
         guard let exhaustion = forecast.exhaustion else { return String(localized: "近期无消耗") }
         if let reset = quota.resetDate, exhaustion < reset {
@@ -201,7 +171,7 @@ struct UsageTrendView: View {
         return String(localized: "预计可用到本次重置")
     }
 
-    private var secondarySummary: String? {
+    private func secondarySummary(forecast: UsageTrendForecast?) -> String? {
         guard let exhaustion = forecast?.exhaustion, let reset = quota.resetDate,
               exhaustion < reset else { return nil }
         return L10n.text("比重置早\(format.duration(reset.timeIntervalSince(exhaustion), compact: true))", locale: locale)
@@ -217,5 +187,74 @@ struct UsageTrendView: View {
             .frame(width: 14, height: 2)
             Text(text).font(.system(size: 9)).foregroundStyle(.secondary)
         }
+    }
+}
+
+/// Pointer and keyboard focus updates stay local to the picker, outside chart evaluation.
+private struct TrendWindowPicker: View {
+    @Binding var forecastWindowHours: Int
+    @State private var hoveringWindow: UsageTrendWindow?
+    @FocusState private var focusedWindow: UsageTrendWindow?
+    @Environment(\.locale) private var locale
+    @Environment(\.colorScheme) private var colorScheme
+    private var palette: AppPalette { AppPalette(dark: colorScheme == .dark) }
+    private var forecastWindow: UsageTrendWindow { UsageTrendWindow(rawValue: forecastWindowHours) ?? .hour }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text("参考时段")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .fixedSize()
+                .accessibilityHidden(true)
+            Spacer(minLength: 12)
+            ForEach(UsageTrendWindow.allCases, id: \.rawValue) { window in
+                Button {
+                    forecastWindowHours = window.rawValue
+                    if NSApp.currentEvent?.type == .leftMouseUp || NSApp.currentEvent?.type == .leftMouseDown {
+                        focusedWindow = nil
+                        // AppKit may install pointer focus after the button action.
+                        Task { @MainActor in
+                            await Task.yield()
+                            if focusedWindow == window { focusedWindow = nil }
+                        }
+                    }
+                } label: {
+                    Text(L10n.text(window.title, locale: locale))
+                        .font(.system(size: 11, weight: .medium))
+                        .padding(.vertical, 5)
+                        .foregroundStyle(forecastWindow == window || hoveringWindow == window ? palette.accent : .secondary)
+                        .overlay(alignment: .bottom) {
+                            Rectangle().fill(forecastWindow == window ? palette.accent : .clear).frame(height: 1)
+                        }
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 5)
+                                .strokeBorder(focusedWindow == window ? palette.accent.opacity(0.3) : .clear, lineWidth: 0.75)
+                                .padding(-3)
+                                .allowsHitTesting(false)
+                        }
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .focusable()
+                .focused($focusedWindow, equals: window)
+                .focusEffectDisabled()
+                .onKeyPress(.space, phases: .down) { _ in
+                    forecastWindowHours = window.rawValue
+                    return .handled
+                }
+                .onHover { hoveringWindow = $0 ? window : nil }
+                .accessibilityAddTraits(forecastWindow == window ? .isSelected : [])
+                .background {
+                    if CommandLine.arguments.contains("--release-smoke-test") {
+                        UsageInteractionAnchor(name: "forecast-window-\(window.rawValue)",
+                            focused: focusedWindow == window,
+                            requestFocus: { focusedWindow = window }, selected: forecastWindow == window)
+                    }
+                }
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("参考时段")
     }
 }

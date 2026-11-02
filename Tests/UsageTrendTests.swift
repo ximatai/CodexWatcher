@@ -3,6 +3,45 @@ import XCTest
 
 final class UsageTrendTests: XCTestCase {
     private let now = Date(timeIntervalSince1970: 2_000_000_000)
+    func testChartCompactionPreservesPlateauEdgesAndSegmentBoundaries() {
+        let first = UUID(), second = UUID()
+        let values: [(Double, UUID)] = [(80, first), (80, first), (80, first),
+            (79, first), (79, first), (79, first), (79, second), (79, second), (78, second)]
+        let samples = values.enumerated().map { index, value in
+            UsageTrendSample(date: now.addingTimeInterval(Double(index) * 30),
+                             remaining: value.0, reset: now.addingTimeInterval(9000), segment: value.1)
+        }
+        XCTAssertEqual(UsageTrend.chartSamples(samples), [0, 2, 3, 5, 6, 7, 8].map { samples[$0] })
+        XCTAssertEqual(UsageTrend.chartSamples([]), [])
+        XCTAssertEqual(UsageTrend.chartSamples(Array(samples.prefix(2))), Array(samples.prefix(2)))
+        let changing = samples.enumerated().map { index, sample in
+            UsageTrendSample(date: sample.date, remaining: 90 - Double(index), reset: sample.reset, segment: first)
+        }
+        XCTAssertEqual(UsageTrend.chartSamples(changing), changing)
+    }
+
+    func testScenarioHorizonAndUninformativeStationaryUpperBound() {
+        let anchor = UsageTrendSample(date: now, remaining: 60,
+                                     reset: now.addingTimeInterval(7 * 86400), segment: UUID())
+        func forecast(_ slow: Double, _ fast: Double, rate: Double = 2) -> UsageTrendForecast {
+            UsageTrendForecast(anchor: anchor, rate: rate / 3600,
+                               slowRate: slow / 3600, fastRate: fast / 3600)
+        }
+        for window in UsageTrendWindow.allCases {
+            XCTAssertEqual(forecast(1, 3).scenarioEnd(window: window), now.addingTimeInterval(window.lookback))
+        }
+        XCTAssertNotNil(forecast(0, 3).scenarioEnd(window: .hour))
+        XCTAssertNil(forecast(0, 30).scenarioEnd(window: .hour))
+        XCTAssertNil(forecast(0, 3).scenarioEnd(window: .day))
+        XCTAssertNil(forecast(0, 0, rate: 0).scenarioEnd(window: .hour))
+        XCTAssertNil(forecast(2, 2).scenarioEnd(window: .hour))
+        let nearReset = UsageTrendSample(date: now, remaining: 60,
+                                        reset: now.addingTimeInterval(600), segment: UUID())
+        let bounded = UsageTrendForecast(anchor: nearReset, rate: 2 / 3600, slowRate: 1 / 3600, fastRate: 3 / 3600)
+        XCTAssertEqual(bounded.scenarioEnd(window: .day), nearReset.reset)
+        XCTAssertEqual(forecast(0, 30).exhaustion, now.addingTimeInterval(30 * 3600))
+    }
+
     private func window(_ used: Double, reset: Date? = nil, id: String = "codex.primary") -> UsageWindow {
         UsageWindow(id: id, bucketID: "codex", name: "Codex",
                     quota: QuotaWindow(usedPercent: used, windowDurationMins: 300,
@@ -43,28 +82,30 @@ final class UsageTrendTests: XCTestCase {
 
     func testPredictsExhaustionAndSpeedRangeFromRealElapsedTime() throws {
         let segment = UUID()
-        let samples = [(0.0, 70.0), (300, 65), (600, 60), (900, 55)].map {
-            UsageTrendSample(date: now.addingTimeInterval($0.0), remaining: $0.1,
-                             reset: now.addingTimeInterval(9000), segment: segment)
+        let samples = stride(from: 0.0, through: 3600, by: 300).map {
+            UsageTrendSample(date: now.addingTimeInterval($0), remaining: 70 - $0 / 180,
+                             reset: now.addingTimeInterval(20000), segment: segment)
         }
-        let forecast = try XCTUnwrap(UsageTrend.forecast(samples: samples, at: now.addingTimeInterval(900)))
-        XCTAssertEqual(forecast.rate, 1.0 / 60, accuracy: 0.000001)
-        XCTAssertEqual(try XCTUnwrap(forecast.exhaustion).timeIntervalSince(now), 4200, accuracy: 0.001)
-        XCTAssertEqual(forecast.remaining(at: now.addingTimeInterval(10000)), 0)
+        let forecast = try XCTUnwrap(UsageTrend.forecast(samples: samples, at: now.addingTimeInterval(3600)))
+        XCTAssertEqual(forecast.rate, 1.0 / 180, accuracy: 0.000001)
+        XCTAssertEqual(try XCTUnwrap(forecast.exhaustion).timeIntervalSince(now), 12600, accuracy: 0.001)
+        XCTAssertEqual(forecast.remaining(at: now.addingTimeInterval(20000)), 0)
         XCTAssertLessThanOrEqual(forecast.slowRate, forecast.rate)
         XCTAssertGreaterThanOrEqual(forecast.fastRate, forecast.rate)
-        XCTAssertNil(UsageTrend.forecast(samples: samples, at: now.addingTimeInterval(1501)))
+        XCTAssertNil(UsageTrend.forecast(samples: samples, at: now.addingTimeInterval(4201)))
     }
 
     func testInsufficientFlatAndExhaustedSamples() throws {
         let segment = UUID()
         func samples(_ remaining: Double) -> [UsageTrendSample] {
-            [0.0, 300, 600].map { UsageTrendSample(date: now.addingTimeInterval($0), remaining: remaining,
-                                                 reset: now.addingTimeInterval(9000), segment: segment) }
+            stride(from: 0.0, through: 3600, by: 300).map {
+                UsageTrendSample(date: now.addingTimeInterval($0), remaining: remaining,
+                                 reset: now.addingTimeInterval(9000), segment: segment)
+            }
         }
-        XCTAssertNil(UsageTrend.forecast(samples: Array(samples(70).prefix(2)), at: now.addingTimeInterval(600)))
-        XCTAssertNil(try XCTUnwrap(UsageTrend.forecast(samples: samples(70), at: now.addingTimeInterval(600))).exhaustion)
-        XCTAssertNil(UsageTrend.forecast(samples: samples(0), at: now.addingTimeInterval(600)))
+        XCTAssertNil(UsageTrend.forecast(samples: Array(samples(70).prefix(2)), at: now.addingTimeInterval(300)))
+        XCTAssertNil(try XCTUnwrap(UsageTrend.forecast(samples: samples(70), at: now.addingTimeInterval(3600))).exhaustion)
+        XCTAssertNil(UsageTrend.forecast(samples: samples(0), at: now.addingTimeInterval(3600)))
         XCTAssertNil(UsageTrend.forecast(samples: samples(70), at: now.addingTimeInterval(10000)))
     }
 
@@ -94,18 +135,185 @@ final class UsageTrendTests: XCTestCase {
     func testAllForecastWindowsRespectSegmentsResetAndFreshness() throws {
         let segment = UUID()
         let reset = now.addingTimeInterval(7 * 86400)
-        let current = [(-600.0, 62.0), (-300, 61), (0, 60)].map {
-            UsageTrendSample(date: now.addingTimeInterval($0.0), remaining: $0.1, reset: reset, segment: segment)
-        }
-        let unrelated = [
-            UsageTrendSample(date: now.addingTimeInterval(-1800), remaining: 100, reset: reset, segment: UUID()),
-            UsageTrendSample(date: now.addingTimeInterval(-900), remaining: 99, reset: reset.addingTimeInterval(3600), segment: segment)
-        ]
         for window in UsageTrendWindow.allCases {
+            let current = stride(from: -window.lookback, through: 0, by: 300).map {
+                UsageTrendSample(date: now.addingTimeInterval($0), remaining: 60 - $0 / 3600,
+                                 reset: reset, segment: segment)
+            }
+            let unrelated = [
+                UsageTrendSample(date: now.addingTimeInterval(-window.lookback - 1800), remaining: 100, reset: reset, segment: UUID()),
+                UsageTrendSample(date: now.addingTimeInterval(-window.lookback - 900), remaining: 99, reset: reset.addingTimeInterval(3600), segment: segment)
+            ]
             let forecast = try XCTUnwrap(UsageTrend.forecast(samples: unrelated + current, at: now, window: window))
-            XCTAssertEqual(forecast.rate * 3600, 12, accuracy: 0.00001)
+            XCTAssertEqual(forecast.rate * 3600, 1, accuracy: 0.00001)
             XCTAssertNil(UsageTrend.forecast(samples: Array(current.suffix(2)), at: now, window: window))
             XCTAssertNil(UsageTrend.forecast(samples: current, at: now.addingTimeInterval(601), window: window))
+        }
+    }
+
+    func testDensePollingDoesNotChangeEqualTimeForecast() throws {
+        let reset = now.addingTimeInterval(7 * 86400)
+        for window in UsageTrendWindow.allCases {
+            let segment = UUID()
+            func sample(_ seconds: Double) -> UsageTrendSample {
+                let progress = (seconds + window.lookback) / window.lookback
+                return UsageTrendSample(date: now.addingTimeInterval(seconds), remaining: 80 - 30 * progress * progress,
+                                        reset: reset, segment: segment)
+            }
+            let uniform = stride(from: -window.lookback, through: 0, by: 300).map(sample)
+            let extra = stride(from: -window.lookback / 4, through: 0, by: 30)
+                .filter { $0.truncatingRemainder(dividingBy: 300) != 0 }.map(sample)
+            let dense = (uniform + extra).sorted { $0.date < $1.date }
+            let a = try XCTUnwrap(UsageTrend.forecast(samples: uniform, at: now, window: window))
+            let b = try XCTUnwrap(UsageTrend.forecast(samples: dense, at: now, window: window))
+            XCTAssertEqual(a.rate, b.rate, accuracy: 0.000000001)
+            XCTAssertEqual(a.slowRate, b.slowRate, accuracy: 0.000000001)
+            XCTAssertEqual(a.fastRate, b.fastRate, accuracy: 0.000000001)
+        }
+    }
+
+    func testCoverageRequiresSelectedWindowWithOnlyOneBoundaryBucketTolerance() throws {
+        for window in UsageTrendWindow.allCases {
+            func samples(start: Double) -> [UsageTrendSample] {
+                let segment = UUID()
+                var offsets = Array(stride(from: start, through: 0, by: 300))
+                if offsets.last != 0 { offsets.append(0) }
+                return offsets.map { UsageTrendSample(date: now.addingTimeInterval($0), remaining: 40 - $0 / 1800,
+                    reset: now.addingTimeInterval(7 * 86400), segment: segment) }
+            }
+            let boundary = -window.lookback + window.bucketDuration
+            XCTAssertNotNil(UsageTrend.forecast(samples: samples(start: boundary), at: now, window: window))
+            guard case .insufficientCoverage = UsageTrend.assess(samples: samples(start: boundary + 1), at: now, window: window) else {
+                return XCTFail("Incomplete \(window) window must not be forecast")
+            }
+            guard case .insufficientCoverage = UsageTrend.assess(samples: samples(start: -600), at: now, window: window) else {
+                return XCTFail("Ten minutes cannot represent \(window)")
+            }
+        }
+    }
+
+    func testRepeatedIntegerReadingsCannotManufactureSignal() throws {
+        let segment = UUID()
+        let samples = stride(from: -3600.0, through: 0, by: 30).map {
+            UsageTrendSample(date: now.addingTimeInterval($0), remaining: 41 - floor(($0 + 3600) / 1800),
+                             reset: now.addingTimeInterval(9000), segment: segment)
+        }
+        guard case .insufficientSignal = UsageTrend.assess(samples: samples, at: now) else {
+            return XCTFail("Two 1pp steps are insufficient even with 121 reads")
+        }
+        XCTAssertNil(UsageTrend.forecast(samples: samples, at: now, window: .eightHours))
+        XCTAssertNil(UsageTrend.forecast(samples: samples, at: now, window: .day))
+    }
+
+    func testOutsidePredecessorCannotSupplyThirdConsumptionStep() {
+        for window in UsageTrendWindow.allCases {
+            let segment = UUID()
+            func sample(_ offset: Double, _ remaining: Double) -> UsageTrendSample {
+                UsageTrendSample(date: now.addingTimeInterval(offset), remaining: remaining,
+                                 reset: now.addingTimeInterval(7 * 86400), segment: segment)
+            }
+            var inside = stride(from: -window.lookback + 1, through: -299, by: 300).map {
+                sample($0, $0 < -window.lookback / 2 ? 80 : 79)
+            }
+            inside.append(sample(0, 78))
+            let predecessor = sample(-window.lookback - 299, 80.1)
+            for readings in [inside, [predecessor] + inside] {
+                guard case .insufficientSignal = UsageTrend.assess(samples: readings, at: now, window: window) else {
+                    return XCTFail("Boundary interpolation must not manufacture a third in-window step")
+                }
+            }
+        }
+    }
+
+    func testBoundaryInterpolationCannotSupplyMinimumNetConsumption() {
+        let segment = UUID()
+        func sample(_ offset: Double, _ remaining: Double) -> UsageTrendSample {
+            UsageTrendSample(date: now.addingTimeInterval(offset), remaining: remaining,
+                             reset: now.addingTimeInterval(9000), segment: segment)
+        }
+        var inside = stride(from: -3301.0, through: -1, by: 300).map {
+            sample($0, 80 - 0.9 * ($0 + 3301) / 3301)
+        }
+        inside.append(sample(0, 79.1))
+        // Interpolation at -3600 adds almost 1pp, but actual in-window readings lost only 0.9pp.
+        for readings in [inside, [sample(-3601, 81)] + inside] {
+            guard case .insufficientSignal = UsageTrend.assess(samples: readings, at: now) else {
+                return XCTFail("Only observed in-window consumption can meet the 1pp signal floor")
+            }
+        }
+    }
+
+    func testStrongInWindowSignalStillAllowsBoundaryInterpolation() throws {
+        let segment = UUID()
+        func sample(_ offset: Double) -> UsageTrendSample {
+            UsageTrendSample(date: now.addingTimeInterval(offset), remaining: 74 - offset / 600,
+                             reset: now.addingTimeInterval(9000), segment: segment)
+        }
+        var inside = stride(from: -3599.0, through: -299, by: 300).map(sample)
+        inside.append(sample(0))
+        for readings in [inside, [sample(-3899)] + inside] {
+            let forecast = try XCTUnwrap(UsageTrend.forecast(samples: readings, at: now))
+            XCTAssertEqual(forecast.rate * 3600, 6, accuracy: 0.000001)
+            XCTAssertEqual(forecast.anchor.remaining, 74)
+        }
+    }
+
+    func testScenarioRangeUsesLongerAverageRatesInsteadOfQuantizationSpikes() throws {
+        let segment = UUID()
+        let samples = stride(from: -3600.0, through: 0, by: 30).map {
+            UsageTrendSample(date: now.addingTimeInterval($0), remaining: 44 - floor(($0 + 3600) / 900),
+                             reset: now.addingTimeInterval(9000), segment: segment)
+        }
+        let forecast = try XCTUnwrap(UsageTrend.forecast(samples: samples, at: now))
+        XCTAssertGreaterThan(forecast.slowRate * 3600, 0)
+        XCTAssertLessThan(forecast.fastRate * 3600, 6)
+    }
+
+    func testMissingIntervalsAreNotInterpolatedEvenWithMatchingSegment() {
+        let segment = UUID()
+        let samples = stride(from: -3600.0, through: 0, by: 300).filter { $0 <= -2100 || $0 >= -600 }.map {
+            UsageTrendSample(date: now.addingTimeInterval($0), remaining: 60 - $0 / 300,
+                             reset: now.addingTimeInterval(9000), segment: segment)
+        }
+        guard case .insufficientCoverage = UsageTrend.assess(samples: samples, at: now) else {
+            return XCTFail("A 25-minute gap must not be filled")
+        }
+    }
+
+    func testResetJitterPreservesCanonicalDeadlineAndForecast() throws {
+        try withStore { store, _ in
+            let reset = now.addingTimeInterval(9000)
+            var history: [String: [UsageTrendSample]] = [:]
+            for step in 0...12 {
+                history = try store.record(account: "a", windows: [window(10 + Double(step),
+                    reset: reset.addingTimeInterval(Double([0, 2, -2][step % 3])))], at: now.addingTimeInterval(Double(step * 300)))
+            }
+            let samples = try XCTUnwrap(history["codex.primary"])
+            XCTAssertEqual(Set(samples.map(\.segment)).count, 1)
+            XCTAssertEqual(Set(samples.map(\.reset)), [reset])
+            XCTAssertNotNil(UsageTrend.forecast(samples: samples, at: now.addingTimeInterval(3600)))
+            let changed = try store.record(account: "a", windows: [window(23, reset: reset.addingTimeInterval(61))],
+                                           at: now.addingTimeInterval(3900))
+            XCTAssertNotEqual(changed["codex.primary"]?.last?.segment, samples.last?.segment)
+        }
+    }
+
+    func testResetToleranceCannotAccumulateDriftOrKeepAnExpiredDeadline() throws {
+        try withStore { store, _ in
+            let reset = now.addingTimeInterval(9000)
+            _ = try store.record(account: "a", windows: [window(10, reset: reset)], at: now)
+            _ = try store.record(account: "a", windows: [window(11, reset: reset.addingTimeInterval(40))], at: now.addingTimeInterval(300))
+            let history = try store.record(account: "a", windows: [window(12, reset: reset.addingTimeInterval(80))], at: now.addingTimeInterval(600))
+            let samples = try XCTUnwrap(history["codex.primary"])
+            XCTAssertEqual(samples[0].segment, samples[1].segment)
+            XCTAssertNotEqual(samples[1].segment, samples[2].segment)
+        }
+        try withStore { store, _ in
+            _ = try store.record(account: "a", windows: [window(10, reset: now.addingTimeInterval(600))], at: now)
+            let history = try store.record(account: "a", windows: [window(10, reset: now.addingTimeInterval(602))], at: now.addingTimeInterval(600))
+            let samples = try XCTUnwrap(history["codex.primary"])
+            XCTAssertNotEqual(samples[0].segment, samples[1].segment)
+            XCTAssertGreaterThan(samples[1].reset, samples[1].date)
         }
     }
 
@@ -122,15 +330,16 @@ final class UsageTrendTests: XCTestCase {
 
     func testChangedReadingWithinBucketKeepsForecastAndLatestAnchor() throws {
         try withStore { store, directory in
-            for (seconds, used) in [(0.0, 10.0), (300, 20), (600, 30)] {
+            for seconds in stride(from: 0.0, through: 3600, by: 300) {
+                let used = 10 + seconds / 600
                 _ = try store.record(account: "a", windows: [window(used)], at: now.addingTimeInterval(seconds))
             }
-            let date = now.addingTimeInterval(605)
-            let history = try store.record(account: "a", windows: [window(31)], at: date)
+            let date = now.addingTimeInterval(3605)
+            let history = try store.record(account: "a", windows: [window(16.1)], at: date)
             let samples = try XCTUnwrap(history["codex.primary"])
-            XCTAssertEqual(samples.count, 3)
+            XCTAssertEqual(samples.count, 13)
             let forecast = try XCTUnwrap(UsageTrend.forecast(samples: samples, at: date))
-            XCTAssertEqual(forecast.anchor.remaining, 69)
+            XCTAssertEqual(forecast.anchor.remaining, 83.9, accuracy: 0.0001)
             XCTAssertEqual(forecast.anchor.date, date)
             let restored = try UsageTrendStore(directory: directory).record(account: "a", windows: [], at: date)
             XCTAssertEqual(restored["codex.primary"], samples)
@@ -140,15 +349,15 @@ final class UsageTrendTests: XCTestCase {
     func testFrequentChangedReadingsDoNotStarveSampling() throws {
         try withStore { store, _ in
             var history: [String: [UsageTrendSample]] = [:]
-            for seconds in stride(from: 0, through: 900, by: 5) {
-                history = try store.record(account: "a", windows: [window(10 + Double(seconds) / 30)],
+            for seconds in stride(from: 0, through: 3600, by: 5) {
+                history = try store.record(account: "a", windows: [window(10 + Double(seconds) / 120)],
                                            at: now.addingTimeInterval(Double(seconds)))
             }
             let samples = try XCTUnwrap(history["codex.primary"])
-            XCTAssertEqual(samples.count, 31)
+            XCTAssertEqual(samples.count, 121)
             XCTAssertEqual(Set(samples.map { floor($0.date.timeIntervalSince1970 / 30) }).count, samples.count)
             XCTAssertEqual(samples.last?.remaining, 60)
-            XCTAssertNotNil(UsageTrend.forecast(samples: samples, at: now.addingTimeInterval(900)))
+            XCTAssertNotNil(UsageTrend.forecast(samples: samples, at: now.addingTimeInterval(3600)))
         }
     }
 

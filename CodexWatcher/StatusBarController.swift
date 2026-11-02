@@ -18,6 +18,7 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
     private var helloSettingsWindow: NSWindow?
     private var resetWindow: NSWindow?
     private var defaultsObserver: NSObjectProtocol?
+    private var renderedLabel: (title: String, symbol: String?)?
     private var stopped = false
     private var clearFocusAfterMouseOpen = false
     private var outsideClickMonitor: Any?
@@ -99,7 +100,12 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
         let quota = monitor.account == nil ? nil : monitor.selectedWindow?.quota
         let isStale = monitor.isStale(at: monitor.displayDate)
         let title = config.title(quota: quota, at: monitor.displayDate, isStale: isStale)
-        item.button?.image = MenuBarLabelRenderer.image(title: title, symbolName: config.effectiveSymbol)
+        let symbol = config.effectiveSymbol
+        if let button = item.button,
+           renderedLabel?.title != title || renderedLabel?.symbol != symbol || button.image == nil {
+            button.image = MenuBarLabelRenderer.image(title: title, symbolName: symbol)
+            renderedLabel = (title, symbol)
+        }
         item.button?.toolTip = isStale
             ? L10n.text("Codex Watcher · 用量待更新，偏移暂不可用。左键查看用量，右键打开设置")
             : L10n.text("Codex Watcher · 左键查看用量，右键打开设置")
