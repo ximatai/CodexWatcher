@@ -4341,19 +4341,19 @@
         }
       }
     },
-    "正在积累%@数据": {
+    "有效采样覆盖不足": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Collecting %@ of data"
+            "value": "Insufficient sampling coverage"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "正在积累%@数据"
+            "value": "有效采样覆盖不足"
           }
         }
       }
@@ -4392,19 +4392,19 @@
         }
       }
     },
-    "按%@等时采样估算；阴影为消耗情景范围，仅供参考。": {
+    "按%@有效采样估算；阴影为消耗情景范围，仅供参考。": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Estimated from equally spaced samples over %@. Shading shows usage scenarios, for reference only."
+            "value": "Estimated from available samples over %@. Shading shows usage scenarios, for reference only."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "按%@等时采样估算；阴影为消耗情景范围，仅供参考。"
+            "value": "按%@有效采样估算；阴影为消耗情景范围，仅供参考。"
           }
         }
       }

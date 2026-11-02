@@ -65,17 +65,22 @@ struct UsageTrendView: View {
                             .foregroundStyle(palette.accent).symbolSize(8)
                     }
                     if let forecast {
-                        if let scenarioEnd = forecast.scenarioEnd(window: forecastWindow) {
-                            ForEach(0..<25, id: \.self) { index in
-                                let point = forecast.anchor.date.addingTimeInterval(scenarioEnd.timeIntervalSince(forecast.anchor.date) * Double(index) / 24)
-                                AreaMark(x: .value("时间", point),
-                                         yStart: .value("较快消耗", forecast.remaining(at: point, rate: forecast.fastRate)),
-                                         yEnd: .value("较慢消耗", forecast.remaining(at: point, rate: forecast.slowRate)))
-                                    .foregroundStyle(LinearGradient(
-                                        colors: [palette.warning.opacity(0.12), palette.warning.opacity(0)],
-                                        startPoint: .leading, endPoint: .trailing))
-                                    .alignsMarkStylesWithPlotArea(false)
-                            }
+                        ForEach(forecast.scenarioDates, id: \.self) { point in
+                            AreaMark(x: .value("时间", point),
+                                     yStart: .value("较快消耗", forecast.remaining(at: point, rate: forecast.fastRate)),
+                                     yEnd: .value("较慢消耗", forecast.remaining(at: point, rate: forecast.slowRate)),
+                                     series: .value("预测", "scenario-range"))
+                                .foregroundStyle(palette.warning.opacity(0.18))
+                            LineMark(x: .value("时间", point),
+                                     y: .value("较快消耗", forecast.remaining(at: point, rate: forecast.fastRate)),
+                                     series: .value("预测", "scenario-fast"))
+                                .foregroundStyle(palette.warning.opacity(0.35))
+                                .lineStyle(StrokeStyle(lineWidth: 0.5))
+                            LineMark(x: .value("时间", point),
+                                     y: .value("较慢消耗", forecast.remaining(at: point, rate: forecast.slowRate)),
+                                     series: .value("预测", "scenario-slow"))
+                                .foregroundStyle(palette.warning.opacity(0.35))
+                                .lineStyle(StrokeStyle(lineWidth: 0.5))
                         }
                         let finish = min(end, forecast.exhaustion ?? end)
                         ForEach([forecast.anchor.date, finish], id: \.self) { point in
@@ -148,7 +153,7 @@ struct UsageTrendView: View {
         .padding(12)
         .background(palette.surface, in: RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(palette.separator))
-        .help(L10n.text("按\(L10n.text(forecastWindow.title, locale: locale))等时采样估算；阴影为消耗情景范围，仅供参考。", locale: locale))
+        .help(L10n.text("按\(L10n.text(forecastWindow.title, locale: locale))有效采样估算；阴影为消耗情景范围，仅供参考。", locale: locale))
     }
 
     private func summaryLabel(_ summary: String, warning: Bool) -> some View {
@@ -170,7 +175,7 @@ struct UsageTrendView: View {
         if quota.usedPercent >= 100 { return String(localized: "当前额度已耗尽，等待重置。") }
         if !windowFitsQuota { return L10n.text("额度周期短于所选窗口") }
         if case .insufficientCoverage = assessment {
-            return L10n.text("正在积累\(L10n.text(forecastWindow.title, locale: locale))数据", locale: locale)
+            return L10n.text("有效采样覆盖不足", locale: locale)
         }
         if case .insufficientSignal = assessment { return L10n.text("消耗变化太少，暂不预测") }
         guard let forecast else { return String(localized: "正在积累数据") }

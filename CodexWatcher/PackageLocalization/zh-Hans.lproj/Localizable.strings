@@ -226,8 +226,8 @@
 	<string>打开确认页</string>
 	<key>打开系统设置</key>
 	<string>打开系统设置</string>
-	<key>按%@等时采样估算；阴影为消耗情景范围，仅供参考。</key>
-	<string>按%@等时采样估算；阴影为消耗情景范围，仅供参考。</string>
+	<key>按%@有效采样估算；阴影为消耗情景范围，仅供参考。</key>
+	<string>按%@有效采样估算；阴影为消耗情景范围，仅供参考。</string>
 	<key>按额度周期的自然时间计算，包含睡眠和休息时间。</key>
 	<string>按额度周期的自然时间计算，包含睡眠和休息时间。</string>
 	<key>提醒后确认</key>
@@ -284,6 +284,8 @@
 	<string>最近一次成功检查</string>
 	<key>有效期未提供</key>
 	<string>有效期未提供</string>
+	<key>有效采样覆盖不足</key>
+	<string>有效采样覆盖不足</string>
 	<key>有重置卡将在 15 分钟内到期。点击查看用量与有效期，确认后使用。</key>
 	<string>有重置卡将在 15 分钟内到期。点击查看用量与有效期，确认后使用。</string>
 	<key>服务器未提供全部卡片详情。</key>
@@ -324,8 +326,6 @@
 	<string>正在更新，请稍后在面板查看重置卡。</string>
 	<key>正在检查更新…</key>
 	<string>正在检查更新…</string>
-	<key>正在积累%@数据</key>
-	<string>正在积累%@数据</string>
 	<key>正在积累数据</key>
 	<string>正在积累数据</string>
 	<key>正在连接…</key>

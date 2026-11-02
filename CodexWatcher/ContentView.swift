@@ -8,7 +8,7 @@ enum DashboardSettingsPage {
 struct ContentView: View {
     @Bindable var monitor: UsageMonitor
     var updates: ReleaseUpdateChecker? = nil
-    var dismissForUpdate: () -> Void = {}
+    var dismissForPresentation: () -> Void = {}
     var handlesExpiryReminders = false
     var openDashboard: () -> Void = {}
     var presentSettings: ((DashboardSettingsPage) -> Void)?
@@ -21,7 +21,7 @@ struct ContentView: View {
     @AppStorage("appearance") private var appearance = AppAppearance.system.rawValue
 
     var body: some View {
-        DashboardContent(monitor: monitor, updates: updates, dismissForUpdate: dismissForUpdate, appearance: $appearance, handlesExpiryReminders: handlesExpiryReminders, openDashboard: openDashboard, presentSettings: presentSettings, presentReset: presentReset, flexibleSize: flexibleSize, maximumHeight: maximumHeight, presentationID: presentationID, showingUsageTrend: initiallyShowingTrend, hoveringProgress: initiallyHoveringProgress)
+        DashboardContent(monitor: monitor, updates: updates, dismissForPresentation: dismissForPresentation, appearance: $appearance, handlesExpiryReminders: handlesExpiryReminders, openDashboard: openDashboard, presentSettings: presentSettings, presentReset: presentReset, flexibleSize: flexibleSize, maximumHeight: maximumHeight, presentationID: presentationID, showingUsageTrend: initiallyShowingTrend, hoveringProgress: initiallyHoveringProgress)
             .onAppear { applyAppearance() }
             .onChange(of: appearance) { _, _ in applyAppearance() }
     }
@@ -37,7 +37,7 @@ private struct DashboardContent: View {
     @Environment(\.colorScheme) private var colorScheme
     @Bindable var monitor: UsageMonitor
     var updates: ReleaseUpdateChecker?
-    let dismissForUpdate: () -> Void
+    let dismissForPresentation: () -> Void
     @Binding var appearance: String
     @AppStorage("privacyMode") private var privacyMode = false
     let handlesExpiryReminders: Bool
@@ -236,7 +236,7 @@ private struct DashboardContent: View {
             }
             if !monitor.executableAvailable {
                 HStack(spacing: 16) {
-                    Button("选择 Codex CLI…") { Task { await monitor.chooseExecutable() } }
+                    Button("选择 Codex CLI…", action: chooseExecutable)
                         .disabled(monitor.isBusy || monitor.loginID != nil)
                     Link("安装帮助", destination: URL(string: "https://github.com/ximatai/CodexWatcher#下载与安装")!)
                 }.font(.callout)
@@ -570,7 +570,7 @@ private struct DashboardContent: View {
                 statusMessage(error, symbol: "exclamationmark.triangle", color: palette.warning)
                 HStack(spacing: 14) {
                     if !monitor.executableAvailable {
-                        Button("选择 CLI…") { Task { await monitor.chooseExecutable() } }
+                        Button("选择 CLI…", action: chooseExecutable)
                             .disabled(monitor.isBusy || monitor.loginID != nil)
                     } else {
                         Button("重新读取") { Task { await monitor.refresh() } }.disabled(monitor.isBusy)
@@ -580,6 +580,11 @@ private struct DashboardContent: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(10).background(palette.warning.opacity(0.07), in: RoundedRectangle(cornerRadius: 8))
         }
+    }
+
+    private func chooseExecutable() {
+        dismissForPresentation()
+        Task { await monitor.chooseExecutable() }
     }
 
     private func showSettings(_ page: DashboardSettingsPage) {
@@ -629,7 +634,7 @@ private struct DashboardContent: View {
                     }
                     Divider()
                     Button("打开独立窗口", action: openDashboard)
-                    Button("选择 Codex CLI…") { Task { await monitor.chooseExecutable() } }
+                    Button("选择 Codex CLI…", action: chooseExecutable)
                         .disabled(monitor.isBusy || monitor.loginID != nil)
                     if monitor.account != nil {
                         Divider()
@@ -639,16 +644,19 @@ private struct DashboardContent: View {
                     Divider()
                     if let updates {
                         if updates.availableVersion != nil {
-                            Button(updates.menuTitle) { dismissForUpdate(); updates.openAvailableRelease() }
+                            Button(updates.menuTitle) { dismissForPresentation(); updates.openAvailableRelease() }
                         }
                         Button(updates.isChecking ? String(localized: "正在检查更新…") : String(localized: "检查更新…")) {
-                            dismissForUpdate()
+                            dismissForPresentation()
                             Task { await updates.checkInteractively() }
                         }
                             .disabled(updates.isChecking)
                     }
                     Button("使用帮助") { NSWorkspace.shared.open(URL(string: "https://github.com/ximatai/CodexWatcher/blob/main/docs/USAGE.md")!) }
-                    Button("关于 Codex Watcher") { AboutPanel.show() }
+                    Button("关于 Codex Watcher") {
+                        dismissForPresentation()
+                        AboutPanel.show()
+                    }
                 } label: {
                     Image(systemName: "gearshape").font(.system(size: 14)).foregroundStyle(.secondary)
                 }

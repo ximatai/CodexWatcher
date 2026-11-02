@@ -136,7 +136,7 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
     // Popovers can disappear independently of SwiftUI's sheet lifecycle. Route every
     // modal action to an owned window so no invisible attached sheet can block clicks.
     private func popoverContent(maximumHeight: CGFloat = 660) -> AnyView {
-        AnyView(ContentView(monitor: monitor, updates: updates, dismissForUpdate: { [weak self] in self?.closePopover() }, openDashboard: openDashboard,
+        AnyView(ContentView(monitor: monitor, updates: updates, dismissForPresentation: { [weak self] in self?.closePopover() }, openDashboard: openDashboard,
             presentSettings: { [weak self] page in
                 switch page {
                 case .menuBar: self?.showSettings()
@@ -602,6 +602,26 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
             closePopover()
             destination()?.close()
         }
+        // About is a normal AppKit panel, so the higher-level popover must close
+        // before presentation. Exercise first and repeated opening.
+        let existingWindows = Set(NSApp.windows.map { ObjectIdentifier($0) })
+        for _ in 0..<2 {
+            showPopover(clearInitialFocus: true)
+            guard await waitFor({
+                guard let view = self.popover.contentViewController?.view else { return false }
+                view.layoutSubtreeIfNeeded()
+                return menuButtons(in: view).count == 1
+            }), let view = popover.contentViewController?.view,
+                let menu = menuButtons(in: view).first?.menu,
+                let index = menu.items.firstIndex(where: { $0.title == L10n.text("关于 Codex Watcher") }) else { return fail(#line) }
+            menu.performActionForItem(at: index)
+            guard await waitFor({
+                guard !self.popover.isShown, let window = NSApp.keyWindow, window.isVisible else { return false }
+                return !existingWindows.contains(ObjectIdentifier(window))
+            }), let panel = NSApp.keyWindow else { return fail(#line) }
+            // AppKit owns the cached standard panel; hide it between openings.
+            panel.orderOut(nil)
+        }
         // Open and cancel a fake reset confirmation; never confirm or send a write.
         guard let credit = monitor.sortedCredits.first,
               let confirmation = monitor.makeResetConfirmation(for: credit) else { return fail(#line) }
@@ -747,7 +767,10 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
         controller.requestEnabled(!controller.isRequested)
     }
     @objc private func openLoginItemSettings() { LoginItemController.shared.openSystemSettings() }
-    @objc private func chooseExecutable() { Task { await monitor.chooseExecutable() } }
+    @objc private func chooseExecutable() {
+        closePopover()
+        Task { await monitor.chooseExecutable() }
+    }
     @objc private func logout() { Task { await monitor.logout() } }
     @objc private func quit() { NSApp.terminate(nil) }
     @objc private func openUpdate() { closePopover(); updates?.openAvailableRelease() }
@@ -759,6 +782,7 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
         NSWorkspace.shared.open(URL(string: "https://github.com/ximatai/CodexWatcher/blob/main/docs/USAGE.md")!)
     }
     @objc private func showAbout() {
+        closePopover()
         AboutPanel.show()
     }
     @objc private func toggleEmailPrivacy() {

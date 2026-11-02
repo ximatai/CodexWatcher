@@ -132,15 +132,17 @@ struct UsageTrendForecast {
     let rate: Double // percentage points per second
     let slowRate: Double
     let fastRate: Double
-    /// Bound scenarios to the observed time scale, never beyond the quota reset.
-    /// A stationary upper bound spanning half the remaining quota is too broad
-    /// to add useful visual information. Keep the central forecast in that case.
-    func scenarioEnd(window: UsageTrendWindow) -> Date? {
-        let end = min(anchor.reset, anchor.date.addingTimeInterval(window.lookback))
-        guard rate > 0, fastRate > slowRate, end > anchor.date else { return nil }
-        let spread = remaining(at: end, rate: slowRate) - remaining(at: end, rate: fastRate)
-        guard slowRate > 0 || spread < anchor.remaining / 2 else { return nil }
-        return end
+    /// Both bounds are straight lines clipped at zero. Include their exact
+    /// exhaustion times so the full-range polygon preserves each corner.
+    var scenarioDates: [Date] {
+        guard rate > 0, fastRate > slowRate, anchor.reset > anchor.date,
+              (fastRate - slowRate) * anchor.reset.timeIntervalSince(anchor.date) > 0.000001 else { return [] }
+        var dates = [anchor.date, anchor.reset]
+        for speed in [slowRate, fastRate] where speed > 0 {
+            let exhaustion = anchor.date.addingTimeInterval(anchor.remaining / speed)
+            if exhaustion > anchor.date, exhaustion < anchor.reset { dates.append(exhaustion) }
+        }
+        return Array(Set(dates)).sorted()
     }
     var exhaustion: Date? { rate > 0 ? anchor.date.addingTimeInterval(anchor.remaining / rate) : nil }
     func remaining(at date: Date, rate: Double? = nil) -> Double {
@@ -158,6 +160,9 @@ enum UsageTrendWindow: Int, CaseIterable {
         case .eightHours: return 900
         case .day: return 3600
         }
+    }
+    var minimumObservedDuration: TimeInterval {
+        self == .hour ? lookback - bucketDuration : lookback * 2 / 3
     }
     var title: String.LocalizationValue {
         switch self {
@@ -246,18 +251,31 @@ enum UsageTrend {
         guard let last = samples.last, last.date <= date, date.timeIntervalSince(last.date) <= 600,
               last.reset > date, last.remaining.isFinite, last.remaining > 0, last.remaining <= 100 else { return .unavailable }
         let cutoff = last.date.addingTimeInterval(-window.lookback)
-        // Keep one earlier observation for interpolation at the left boundary.
-        let segment = samples.filter { $0.segment == last.segment && sameReset($0.reset, last.reset) && $0.date <= last.date }
-        let startIndex = segment.lastIndex(where: { $0.date <= cutoff }) ?? segment.startIndex
-        let recent = Array(segment[startIndex...])
-        guard recent.count >= 3, let first = recent.first,
-              first.date <= cutoff.addingTimeInterval(window.bucketDuration) else { return .insufficientCoverage }
-        for (a, b) in zip(recent, recent.dropFirst()) {
-            guard a.remaining.isFinite, (0...100).contains(a.remaining),
-                  b.remaining.isFinite, (0...100).contains(b.remaining),
-                  b.date > a.date, b.date.timeIntervalSince(a.date) <= maximumGap,
-                  b.remaining <= a.remaining else { return .insufficientCoverage }
+        // A read gap is not a quota reset. Walk the current quota history back
+        // without crossing a deadline change, recovery, or unexplained segment edge.
+        var firstIndex = samples.count - 1
+        while firstIndex > 0 {
+            let a = samples[firstIndex - 1], b = samples[firstIndex]
+            guard a.date < b.date, a.remaining.isFinite, (0...100).contains(a.remaining),
+                  a.remaining >= b.remaining, sameReset(a.reset, last.reset), a.reset > date else { break }
+            let gap = b.date.timeIntervalSince(a.date)
+            guard a.segment == b.segment || gap > maximumGap || a.reset != b.reset else { break }
+            firstIndex -= 1
+            if a.date <= cutoff { break }
         }
+        let recent = Array(samples[firstIndex...])
+        guard recent.count >= 3, let first = recent.first else { return .insufficientCoverage }
+        // Measure actual observed intervals, clipped to the selected window.
+        // Offline time never supplies coverage or consumption evidence.
+        var observedDuration: TimeInterval = 0
+        var steps: [Double] = []
+        for (a, b) in zip(recent, recent.dropFirst()) {
+            guard b.date.timeIntervalSince(a.date) <= maximumGap else { continue }
+            observedDuration += max(0, b.date.timeIntervalSince(max(a.date, cutoff)))
+            let drop = a.remaining - b.remaining
+            if a.date >= cutoff, drop > 0.000001 { steps.append(drop) }
+        }
+        guard observedDuration + 0.000001 >= window.minimumObservedDuration else { return .insufficientCoverage }
         // Equally spaced endpoints give wall time equal weight regardless of poll frequency.
         // Interpolation is allowed only inside observed intervals of at most 15 minutes.
         var points: [(time: TimeInterval, remaining: Double)] = []
@@ -272,26 +290,37 @@ enum UsageTrend {
             if a.date == target {
                 remaining = a.remaining
             } else {
-                guard index + 1 < recent.count else { return .insufficientCoverage }
+                guard index + 1 < recent.count else { continue }
                 let b = recent[index + 1]
+                guard b.date.timeIntervalSince(a.date) <= maximumGap else { continue }
                 let fraction = target.timeIntervalSince(a.date) / b.date.timeIntervalSince(a.date)
                 remaining = a.remaining + (b.remaining - a.remaining) * fraction
             }
             points.append((target.timeIntervalSince(cutoff), remaining))
         }
-        // At most one boundary bucket may be absent: 55 min / 7h45m / 23h coverage.
-        guard points.count >= count else { return .insufficientCoverage }
-        let drop = points.first!.remaining - points.last!.remaining
-        if drop == 0 {
+        let requiredPoints = window == .hour ? count : Int(ceil(Double(count + 1) * 2 / 3))
+        guard points.count >= requiredPoints else { return .insufficientCoverage }
+        let observed = recent.drop(while: { $0.date < cutoff })
+        // A decline straddling the cutoff has uncertain timing, even when a
+        // long read gap prevents interpolation at the boundary.
+        let boundaryDrop = first.date < cutoff && recent[1].date > cutoff
+            && first.remaining > recent[1].remaining
+        if !boundaryDrop, observed.first?.remaining == last.remaining, points.first?.remaining == last.remaining {
             return .ready(UsageTrendForecast(anchor: last, rate: 0, slowRate: 0, fastRate: 0))
         }
-        // The boundary predecessor supports interpolation, not evidence of consumption
-        // inside the window. Gate on actual in-window readings, including their net drop.
-        let observed = recent.drop(while: { $0.date < cutoff })
-        let steps = zip(observed, observed.dropFirst()).map { $0.remaining - $1.remaining }.filter { $0 > 0.000001 }
-        let observedDrop = observed.first!.remaining - last.remaining
-        // Three observed increments and at least 1pp avoid extrapolating rounding noise.
-        guard let step = steps.min(), steps.count >= 3, observedDrop + 0.000001 >= max(1, 3 * step) else { return .insufficientSignal }
+        // Boundary interpolation and unobserved gaps cannot manufacture signal.
+        let observedDrop = steps.reduce(0, +)
+        guard let step = steps.min() else { return .insufficientSignal }
+        let strongSignal = steps.count >= 3 && observedDrop + 0.000001 >= max(1, 3 * step)
+        if !strongSignal {
+            // Integer quota readings often change only once per hour. Use the
+            // observed average, not a step's position in a regression, for a
+            // coarse hourly estimate. The +/-1pp scenarios reflect rounding.
+            guard window == .hour, observedDrop + 0.000001 >= 1 else { return .insufficientSignal }
+            return .ready(UsageTrendForecast(anchor: last, rate: observedDrop / observedDuration,
+                slowRate: max(0, observedDrop - 1) / observedDuration,
+                fastRate: (observedDrop + 1) / observedDuration))
+        }
         let meanX = points.map(\.time).reduce(0, +) / Double(points.count)
         let meanY = points.map(\.remaining).reduce(0, +) / Double(points.count)
         let denominator = points.reduce(0) { $0 + pow($1.time - meanX, 2) }
@@ -299,10 +328,13 @@ enum UsageTrend {
         guard rate > 0 else { return .insufficientSignal }
         // Half-window average speeds reduce quantization spikes. Use the central
         // 80% of observed scenarios, not raw extrema or a confidence interval.
-        let span = points.count / 2
-        let rates = (0..<(points.count - span)).map { i in
-            max(0, (points[i].remaining - points[i + span].remaining) / (points[i + span].time - points[i].time))
+        let rates = points.indices.compactMap { i -> Double? in
+            guard let j = points.indices.dropFirst(i + 1).first(where: {
+                points[$0].time - points[i].time >= window.lookback / 2
+            }) else { return nil }
+            return max(0, (points[i].remaining - points[j].remaining) / (points[j].time - points[i].time))
         }.sorted()
+        guard !rates.isEmpty else { return .insufficientCoverage }
         func quantile(_ probability: Double) -> Double {
             let position = probability * Double(rates.count - 1)
             let lower = Int(position), upper = min(lower + 1, rates.count - 1)

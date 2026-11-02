@@ -16,7 +16,7 @@
 | [usage-trend-dark.png](usage-trend-dark.png) | 剩余额度历史与预测（暗色） |
 | [usage-trend-24h-ready.png](usage-trend-24h-ready.png) | 24 小时数据充分时的预测与情景范围（[英文](en/usage-trend-24h-ready.png)） |
 | [usage-trend-24h-collecting.png](usage-trend-24h-collecting.png) | 长窗口覆盖不足时暂停预测（[英文](en/usage-trend-24h-collecting.png)） |
-| [usage-trend-weak-signal.png](usage-trend-weak-signal.png) | 重复读取少量整数阶梯不会生成耗尽预测（[英文](en/usage-trend-weak-signal.png)） |
+| [usage-trend-weak-signal.png](usage-trend-weak-signal.png) | 一小时少量整数阶梯采用累计下降与观测时长粗估（[英文](en/usage-trend-weak-signal.png)） |
 | [usage-trend-summary-row.png](usage-trend-summary-row.png) | 长时长预测摘要在 350 点宽度下单行展示；[英文预览](en/usage-trend-summary-row.png) |
 | [dashboard-pro-short-only.png](dashboard-pro-short-only.png) | Pro 仅返回短周期额度，不显示 7 天窗口 |
 | [menu-bar-settings.png](menu-bar-settings.png) | 状态栏设置与数值预览 |
