@@ -117,14 +117,25 @@ struct UsageTrendForecast {
     }
 }
 
-enum UsageTrend {
-    static let lookback: TimeInterval = 3600
+enum UsageTrendWindow: Int, CaseIterable {
+    case hour = 1, eightHours = 8, day = 24
 
-    static func forecast(samples: [UsageTrendSample], at date: Date) -> UsageTrendForecast? {
+    var lookback: TimeInterval { Double(rawValue) * 3600 }
+    var title: String.LocalizationValue {
+        switch self {
+        case .hour: return "1 小时"
+        case .eightHours: return "8 小时"
+        case .day: return "24 小时"
+        }
+    }
+}
+
+enum UsageTrend {
+    static func forecast(samples: [UsageTrendSample], at date: Date, window: UsageTrendWindow = .hour) -> UsageTrendForecast? {
         guard let last = samples.last, last.date <= date, date.timeIntervalSince(last.date) <= 600,
               last.reset > date, last.remaining > 0 else { return nil }
         let recent = samples.filter {
-            $0.segment == last.segment && $0.reset == last.reset && $0.date >= last.date.addingTimeInterval(-lookback)
+            $0.segment == last.segment && $0.reset == last.reset && $0.date >= last.date.addingTimeInterval(-window.lookback)
                 && $0.date <= last.date && $0.remaining.isFinite && (0...100).contains($0.remaining)
         }
         guard recent.count >= 3, let first = recent.first,

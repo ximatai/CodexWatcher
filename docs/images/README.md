@@ -12,7 +12,7 @@
 | [dashboard-progress-hover-dark.png](dashboard-progress-hover-dark.png) | 全宽进度轴与悬停热区（暗色） |
 | [dashboard-trend-full-light.png](dashboard-trend-full-light.png) | 点击进度区域切换后的趋势视图与重置卡，点击左侧标题返回（亮色，拉高窗口展示） |
 | [dashboard-trend-full-dark.png](dashboard-trend-full-dark.png) | 切换后的趋势视图（暗色，拉高窗口展示） |
-| [usage-trend-light.png](usage-trend-light.png) | 剩余额度历史、走势范围与预测耗尽时间（亮色） |
+| [usage-trend-light.png](usage-trend-light.png) | 剩余额度历史、1/8/24 小时窗口切换与预测耗尽时间（亮色） |
 | [usage-trend-dark.png](usage-trend-dark.png) | 剩余额度历史与预测（暗色） |
 | [usage-trend-summary-row.png](usage-trend-summary-row.png) | 长时长预测摘要在 350 点宽度下单行展示；[英文预览](en/usage-trend-summary-row.png) |
 | [dashboard-pro-short-only.png](dashboard-pro-short-only.png) | Pro 仅返回短周期额度，不显示 7 天窗口 |

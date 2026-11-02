@@ -9,20 +9,24 @@ struct UsageTrendView: View {
     let storageFailed: Bool
     var recoveredHistory = false
     var headerTitle: AnyView? = nil
+    @State private var hoveringWindow: UsageTrendWindow?
+    @FocusState private var focusedWindow: UsageTrendWindow?
+    @AppStorage("trendForecastWindowHours") private var forecastWindowHours = UsageTrendWindow.hour.rawValue
     @Environment(\.locale) private var locale
     @Environment(\.timeZone) private var timeZone
     @Environment(\.colorScheme) private var colorScheme
     private var palette: AppPalette { AppPalette(dark: colorScheme == .dark) }
     private var format: PresentationFormat { PresentationFormat(locale: locale, timeZone: timeZone) }
+    private var forecastWindow: UsageTrendWindow { UsageTrendWindow(rawValue: forecastWindowHours) ?? .hour }
     private var history: [UsageTrendSample] {
         samples.filter { $0.reset == quota.resetDate }
     }
     private var forecast: UsageTrendForecast? {
         guard !stale, quota.usedPercent.isFinite, (0...100).contains(quota.usedPercent),
               let last = history.last, abs(last.remaining - (100 - quota.usedPercent)) < 0.001 else { return nil }
-        return UsageTrend.forecast(samples: history, at: date)
+        return UsageTrend.forecast(samples: history, at: date, window: forecastWindow)
     }
-    private var start: Date { history.first?.date ?? date.addingTimeInterval(-3600) }
+    private var start: Date { history.first?.date ?? date.addingTimeInterval(-forecastWindow.lookback) }
     private var end: Date { max(quota.resetDate ?? date, date.addingTimeInterval(60)) }
 
     var body: some View {
@@ -37,6 +41,40 @@ struct UsageTrendView: View {
                 legend("历史", color: palette.accent, dashed: false)
                 legend("预测", color: palette.warning, dashed: true)
             }
+            HStack(spacing: 18) {
+                ForEach(UsageTrendWindow.allCases, id: \.rawValue) { window in
+                    Button {
+                        forecastWindowHours = window.rawValue
+                    } label: {
+                        Text(L10n.text(window.title, locale: locale))
+                            .font(.system(size: 11, weight: .medium))
+                            .padding(.vertical, 5)
+                            .foregroundStyle(forecastWindow == window || hoveringWindow == window ? palette.accent : .secondary)
+                            .overlay(alignment: .bottom) {
+                                Rectangle().fill(forecastWindow == window ? palette.accent : .clear).frame(height: 1)
+                            }
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .focusable()
+                    .focused($focusedWindow, equals: window)
+                    .onKeyPress(.space, phases: .down) { _ in
+                        forecastWindowHours = window.rawValue
+                        return .handled
+                    }
+                    .onHover { hoveringWindow = $0 ? window : nil }
+                    .accessibilityAddTraits(forecastWindow == window ? .isSelected : [])
+                    .background {
+                        if CommandLine.arguments.contains("--release-smoke-test") {
+                            UsageInteractionAnchor(name: "forecast-window-\(window.rawValue)",
+                                focused: focusedWindow == window,
+                                requestFocus: { focusedWindow = window }, selected: forecastWindow == window)
+                        }
+                    }
+                }
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("预测窗口")
             Chart {
                 ForEach(Array(history.enumerated()), id: \.offset) { _, sample in
                     LineMark(x: .value("时间", sample.date), y: .value("剩余额度", sample.remaining),
@@ -120,7 +158,7 @@ struct UsageTrendView: View {
         .padding(12)
         .background(palette.surface, in: RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(palette.separator))
-        .help("按近一小时用量估算，阴影反映消耗速度差异，仅供参考。")
+        .help(L10n.text("按最近\(L10n.text(forecastWindow.title, locale: locale))内的可用采样估算，阴影反映消耗速度差异，仅供参考。", locale: locale))
     }
 
     private var summaryLabel: some View {

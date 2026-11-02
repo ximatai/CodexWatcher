@@ -14,6 +14,12 @@
 	<string>%@，已用 %@</string>
 	<key>%lld 张可用</key>
 	<string>%lld 张可用</string>
+	<key>1 小时</key>
+	<string>1 小时</string>
+	<key>24 小时</key>
+	<string>24 小时</string>
+	<key>8 小时</key>
+	<string>8 小时</string>
 	<key>CLI 未提供独立临时会话，已跳过自动 hello。</key>
 	<string>CLI 未提供独立临时会话，已跳过自动 hello。</string>
 	<key>Codex CLI 启动失败：%@</key>
@@ -218,8 +224,8 @@
 	<string>打开确认页</string>
 	<key>打开系统设置</key>
 	<string>打开系统设置</string>
-	<key>按近一小时用量估算，阴影反映消耗速度差异，仅供参考。</key>
-	<string>按近一小时用量估算，阴影反映消耗速度差异，仅供参考。</string>
+	<key>按最近%@内的可用采样估算，阴影反映消耗速度差异，仅供参考。</key>
+	<string>按最近%@内的可用采样估算，阴影反映消耗速度差异，仅供参考。</string>
 	<key>按额度周期的自然时间计算，包含睡眠和休息时间。</key>
 	<string>按额度周期的自然时间计算，包含睡眠和休息时间。</string>
 	<key>提醒后确认</key>
@@ -504,6 +510,8 @@
 	<string>预测</string>
 	<key>预测剩余</key>
 	<string>预测剩余</string>
+	<key>预测窗口</key>
+	<string>预测窗口</string>
 	<key>预计可用到本次重置</key>
 	<string>预计可用到本次重置</string>
 	<key>额度窗口</key>

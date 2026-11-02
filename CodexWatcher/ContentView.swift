@@ -752,16 +752,19 @@ struct UsageInteractionAnchor: NSViewRepresentable {
     let name: String
     let focused: Bool
     let requestFocus: () -> Void
+    var selected = false
     func makeNSView(context: Context) -> UsageInteractionProbe { UsageInteractionProbe() }
     func updateNSView(_ view: UsageInteractionProbe, context: Context) {
         view.identifier = NSUserInterfaceItemIdentifier(name)
         view.controlFocused = focused
+        view.controlSelected = selected
         view.requestControlFocus = requestFocus
     }
 }
 
 final class UsageInteractionProbe: NSView {
     var controlFocused = false
+    var controlSelected = false
     var requestControlFocus: (() -> Void)?
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }

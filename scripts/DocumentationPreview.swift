@@ -25,6 +25,7 @@ struct DocumentationPreview {
             try? FileManager.default.removeItem(at: temporary)
         }
         defaults.set(false, forKey: "privacyMode")
+        defaults.set(1, forKey: "trendForecastWindowHours")
         let executable = temporary.appendingPathComponent("fake-codex")
         let script = #"""
         #!/bin/sh
@@ -100,7 +101,7 @@ struct DocumentationPreview {
         }
         for dark in [false, true] {
             try await render(UsageTrendView(samples: monitor.trendHistory["codex.primary"] ?? [],
-                quota: shortQuota, date: Date(), stale: false, storageFailed: false).padding(16),
+                quota: shortQuota, date: Date(), stale: false, storageFailed: false).defaultAppStorage(defaults).padding(16),
                 size: NSSize(width: 390, height: 330), dark: dark,
                 to: output.appendingPathComponent(dark ? "usage-trend-dark.png" : "usage-trend-light.png"))
         }
@@ -114,7 +115,7 @@ struct DocumentationPreview {
         for width in [390, 350, 280] {
             try await render(UsageTrendView(samples: longSamples,
                 quota: QuotaWindow(usedPercent: 30, windowDurationMins: 10080, resetsAt: longReset.timeIntervalSince1970),
-                date: Date(timeIntervalSince1970: now), stale: false, storageFailed: false).padding(16),
+                date: Date(timeIntervalSince1970: now), stale: false, storageFailed: false).defaultAppStorage(defaults).padding(16),
                 size: NSSize(width: width, height: 300), dark: true,
                 to: output.appendingPathComponent("usage-trend-long-summary-\(width).png"))
         }

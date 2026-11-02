@@ -9,6 +9,8 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
     private let updates: ReleaseUpdateChecker?
     private let openDashboard: () -> Void
     private let observesExternalEvents: Bool
+    private let viewDefaults: UserDefaults
+    private let smokeDefaultsName: String?
     private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let popover = NSPopover()
     private var settingsWindow: NSWindow?
@@ -29,6 +31,15 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
         self.updates = updates
         self.openDashboard = openDashboard
         self.observesExternalEvents = observesExternalEvents
+        if CommandLine.arguments.contains("--release-smoke-test") {
+            let name = "WatcherTrendSmoke-\(UUID())"
+            smokeDefaultsName = name
+            viewDefaults = UserDefaults(suiteName: name)!
+            viewDefaults.set(1, forKey: "trendForecastWindowHours")
+        } else {
+            smokeDefaultsName = nil
+            viewDefaults = .standard
+        }
         super.init()
         if let button = item.button {
             button.target = self
@@ -59,6 +70,7 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
 
     func stop() {
         stopped = true
+        if let smokeDefaultsName { viewDefaults.removePersistentDomain(forName: smokeDefaultsName) }
         if let defaultsObserver { NotificationCenter.default.removeObserver(defaultsObserver) }
         defaultsObserver = nil
         stopDismissalMonitoring()
@@ -117,8 +129,8 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
 
     // Popovers can disappear independently of SwiftUI's sheet lifecycle. Route every
     // modal action to an owned window so no invisible attached sheet can block clicks.
-    private func popoverContent(maximumHeight: CGFloat = 660) -> ContentView {
-        ContentView(monitor: monitor, updates: updates, dismissForUpdate: { [weak self] in self?.closePopover() }, openDashboard: openDashboard,
+    private func popoverContent(maximumHeight: CGFloat = 660) -> AnyView {
+        AnyView(ContentView(monitor: monitor, updates: updates, dismissForUpdate: { [weak self] in self?.closePopover() }, openDashboard: openDashboard,
             presentSettings: { [weak self] page in
                 switch page {
                 case .menuBar: self?.showSettings()
@@ -126,12 +138,13 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
                 case .automaticHello: self?.showHelloSettings()
                 }
             }, presentReset: { [weak self] in self?.showReset($0) }, maximumHeight: maximumHeight)
+            .defaultAppStorage(viewDefaults))
     }
 
     private func showPopover(clearInitialFocus: Bool) {
         guard let button = item.button else { return }
         let availableHeight = max(280, (button.window?.screen?.visibleFrame.height ?? 760) - 48)
-        if let hosting = popover.contentViewController as? NSHostingController<ContentView> {
+        if let hosting = popover.contentViewController as? NSHostingController<AnyView> {
             hosting.rootView = popoverContent(maximumHeight: availableHeight)
         }
         clearFocusAfterMouseOpen = clearInitialFocus
@@ -377,6 +390,35 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
               await waitFor({ probe("quota-progress") != nil && probe("quota-trend-return") == nil }),
               let restored = probe("quota-progress"), !restored.controlFocused, click(restored),
               await waitFor({ probe("quota-trend-return") != nil }) else { return fail() }
+        // Use real hit testing and Space events; preferences belong to a disposable suite.
+        guard let eight = probe("forecast-window-8"), click(eight),
+              await waitFor({ probe("forecast-window-8")?.controlSelected == true
+                  && self.viewDefaults.integer(forKey: "trendForecastWindowHours") == 8 }),
+              let day = probe("forecast-window-24") else { return fail() }
+        day.requestControlFocus?()
+        guard await waitFor({ probe("forecast-window-24")?.controlFocused == true }) else { return fail() }
+        try? await Task.sleep(for: .milliseconds(200))
+        guard space(), await waitFor({ probe("forecast-window-24")?.controlSelected == true
+            && self.viewDefaults.integer(forKey: "trendForecastWindowHours") == 24 }),
+              let smokeDefaultsName, viewDefaults.synchronize() else { return fail() }
+        let persisted = Process()
+        let output = Pipe()
+        persisted.executableURL = URL(fileURLWithPath: "/usr/bin/defaults")
+        persisted.arguments = ["read", smokeDefaultsName, "trendForecastWindowHours"]
+        persisted.standardOutput = output
+        do { try persisted.run() } catch { return fail() }
+        persisted.waitUntilExit()
+        guard persisted.terminationStatus == 0,
+              String(data: output.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines) == "24" else { return fail() }
+        closePopover()
+        showPopover(clearInitialFocus: true)
+        guard await waitFor({ probe("quota-progress") != nil }),
+              let reopened = probe("quota-progress"), click(reopened),
+              await waitFor({ probe("forecast-window-24")?.controlSelected == true }),
+              let hour = probe("forecast-window-1"), click(hour),
+              await waitFor({ probe("forecast-window-1")?.controlSelected == true }) else { return fail() }
+        FileHandle.standardError.write(Data("Forecast windows: click, keyboard Space, persisted preference and reopen passed\n".utf8))
         closePopover()
         // This open simulates keyboard use. Do not race its explicit focus request
         // against the delegate's deferred mouse-open focus clearing on CI desktops.
