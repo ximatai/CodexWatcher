@@ -409,11 +409,14 @@ final class UsageTrendTests: XCTestCase {
     func testLongWindowsUseBothSidesOfReadGapsAtRealElapsedTimes() throws {
         for window in [UsageTrendWindow.eightHours, .day] {
             let before = UUID(), after = UUID()
-            let samples = stride(from: -window.lookback, through: 0, by: 300).filter {
-                $0 <= -5 * 3600 || $0 >= -4 * 3600
-            }.map { offset in
-                UsageTrendSample(date: now.addingTimeInterval(offset), remaining: 40 - offset / 1800,
-                    reset: now.addingTimeInterval(86400), segment: offset <= -5 * 3600 ? before : after)
+            let offsets: [TimeInterval] = stride(from: -window.lookback, through: 0, by: 300).filter {
+                $0 <= -18000 || $0 >= -14400
+            }
+            let samples: [UsageTrendSample] = offsets.map { offset in
+                let remaining = 40.0 - offset / 1800.0
+                let segment = offset <= -18000 ? before : after
+                return UsageTrendSample(date: now.addingTimeInterval(offset), remaining: remaining,
+                    reset: now.addingTimeInterval(86400), segment: segment)
             }
             let forecast = try XCTUnwrap(UsageTrend.forecast(samples: samples, at: now, window: window))
             XCTAssertEqual(forecast.rate * 3600, 2, accuracy: 0.000001)
@@ -425,11 +428,14 @@ final class UsageTrendTests: XCTestCase {
 
     func testDayForecastRequiresTwoThirdsActualCoverageNotJustGridEndpoints() throws {
         let before = UUID(), after = UUID()
-        let samples = stride(from: -86400.0, through: 0, by: 300).filter {
-            $0 <= -16 * 3600 || $0 >= -8 * 3600
-        }.map { offset in
-            UsageTrendSample(date: now.addingTimeInterval(offset), remaining: 40 - offset / 1800,
-                reset: now.addingTimeInterval(86400), segment: offset <= -16 * 3600 ? before : after)
+        let offsets: [TimeInterval] = stride(from: -86400.0, through: 0, by: 300).filter {
+            $0 <= -57600 || $0 >= -28800
+        }
+        let samples: [UsageTrendSample] = offsets.map { offset in
+            let remaining = 40.0 - offset / 1800.0
+            let segment = offset <= -57600 ? before : after
+            return UsageTrendSample(date: now.addingTimeInterval(offset), remaining: remaining,
+                reset: now.addingTimeInterval(86400), segment: segment)
         }
         XCTAssertNotNil(UsageTrend.forecast(samples: samples, at: now, window: .day))
         let lessCoverage = samples.filter { $0.date != now.addingTimeInterval(-8 * 3600) }
