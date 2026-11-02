@@ -59,6 +59,49 @@ struct PresentationFormat {
         return formatter.string(from: date)
     }
 
+    func trendAxisDates(domain: ClosedRange<Date>, dateOnly: Bool, desiredCount: Int) -> [Date] {
+        var calendar = Calendar.autoupdatingCurrent
+        calendar.locale = locale
+        calendar.timeZone = timeZone
+        let targetMinutes = domain.upperBound.timeIntervalSince(domain.lowerBound) / 60 / Double(max(2, desiredCount) - 1)
+        let component: Calendar.Component = dateOnly ? .day : targetMinutes >= 60 ? .hour : .minute
+        let step: Int
+        var point: Date
+        if dateOnly {
+            step = max(1, Int(floor(targetMinutes / 1440)))
+            point = calendar.startOfDay(for: domain.lowerBound)
+        } else {
+            step = component == .hour
+                ? ([1, 2, 3, 6, 12].last { Double($0 * 60) <= targetMinutes } ?? 1)
+                : ([1, 2, 5, 10, 15, 30].last { Double($0) <= targetMinutes } ?? 1)
+            let intervalStart = calendar.dateInterval(of: component, for: domain.lowerBound)?.start ?? domain.lowerBound
+            point = calendar.date(byAdding: component, value: -(calendar.component(component, from: domain.lowerBound) % step), to: intervalStart) ?? intervalStart
+        }
+        var dates: [Date] = []
+        while point <= domain.upperBound {
+            if point >= domain.lowerBound { dates.append(point) }
+            guard let next = calendar.date(byAdding: component, value: step, to: point), next > point else { break }
+            point = next
+        }
+        return dates.isEmpty ? [domain.lowerBound] : dates
+    }
+
+    func trendAxisDate(_ point: Date, domain: ClosedRange<Date>, dateOnly: Bool = false) -> String {
+        var calendar = Calendar.autoupdatingCurrent
+        calendar.locale = locale
+        calendar.timeZone = timeZone
+        let spansDays = dateOnly || domain.upperBound.timeIntervalSince(domain.lowerBound) >= 2 * 86400
+        let crossesDay = !calendar.isDate(domain.lowerBound, inSameDayAs: domain.upperBound)
+        guard spansDays || crossesDay else { return date(point, timeOnly: true) }
+        let crossesYear = calendar.component(.year, from: domain.lowerBound) != calendar.component(.year, from: domain.upperBound)
+        let formatter = DateFormatter()
+        formatter.locale = locale
+        formatter.timeZone = timeZone
+        formatter.setLocalizedDateFormatFromTemplate(crossesYear ? "yMd" : "Md")
+        let day = formatter.string(from: point)
+        return spansDays ? day : day + "\n" + date(point, timeOnly: true)
+    }
+
     func number(_ value: Double, decimals: Int = 0, signed: Bool = false) -> String {
         let formatter = NumberFormatter()
         formatter.locale = locale

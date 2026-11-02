@@ -20,6 +20,42 @@ final class UsageTrendTests: XCTestCase {
         XCTAssertEqual(UsageTrend.chartSamples(changing), changing)
     }
 
+    func testChartReductionBoundsDenseHistoryAndPreservesExtrema() {
+        let segment = UUID()
+        let samples = (0..<23040).map { index in
+            UsageTrendSample(date: now.addingTimeInterval(Double(index) * 30), remaining: 95 - Double(index) / 400,
+                             reset: now.addingTimeInterval(9 * 86400), segment: segment)
+        }
+        let domain = samples.first!.date...samples.last!.date
+        let reduced = UsageTrend.chartSamples(samples, domain: domain, width: 334)
+        XCTAssertLessThanOrEqual(reduced.count, 4 * 334)
+        XCTAssertEqual(reduced.first, samples.first)
+        XCTAssertEqual(reduced.last, samples.last)
+        XCTAssertEqual(reduced.map(\.date), reduced.map(\.date).sorted())
+        XCTAssertGreaterThan(UsageTrend.chartSamples(samples, domain: domain, width: 668).count, reduced.count)
+        let values: [Double] = [50, 80, 20, 60, 40, 55]
+        let spikes = values.enumerated().map { index, value in
+            UsageTrendSample(date: now.addingTimeInterval(Double(index)), remaining: value,
+                             reset: now.addingTimeInterval(9000), segment: segment)
+        }
+        XCTAssertEqual(UsageTrend.chartSamples(spikes, domain: now...now.addingTimeInterval(10), width: 1),
+                       [0, 1, 2, 5].map { spikes[$0] })
+        XCTAssertEqual(UsageTrend.chartSamples(spikes, domain: now...now.addingTimeInterval(10), width: 0),
+                       [0, 1, 2, 5].map { spikes[$0] })
+        XCTAssertEqual(UsageTrend.chartSamples([], domain: domain, width: 334), [])
+    }
+
+    func testChartReductionPreservesBothSidesOfEverySegmentBoundary() {
+        let first = UUID(), second = UUID(), third = UUID()
+        let segments = [first, first, first, second, second, second, third, third]
+        let samples = segments.enumerated().map { index, segment in
+            UsageTrendSample(date: now.addingTimeInterval(Double(index)), remaining: 80 - Double(index),
+                             reset: now.addingTimeInterval(9000), segment: segment)
+        }
+        XCTAssertEqual(UsageTrend.chartSamples(samples, domain: now...now.addingTimeInterval(10), width: 1),
+                       [0, 2, 3, 5, 6, 7].map { samples[$0] })
+    }
+
     func testScenarioHorizonAndUninformativeStationaryUpperBound() {
         let anchor = UsageTrendSample(date: now, remaining: 60,
                                      reset: now.addingTimeInterval(7 * 86400), segment: UUID())
@@ -402,6 +438,67 @@ final class UsageTrendTests: XCTestCase {
             XCTAssertTrue(FileManager.default.fileExists(atPath: file.path))
             XCTAssertFalse(FileManager.default.fileExists(atPath: file.appendingPathExtension("corrupt").path))
         }
+    }
+
+    func testLayeredRetentionKeepsEightDaysAndExactPredictionInputs() throws {
+        let segment = UUID(), reset = now.addingTimeInterval(86400)
+        let original = stride(from: -9 * 86400.0, through: 0, by: 30).map { offset in
+            UsageTrendSample(date: now.addingTimeInterval(offset), remaining: 40 + min(floor(-offset / 300) * 0.2, 50),
+                             reset: reset, segment: segment)
+        }
+        let retained = UsageTrendStore.retainedSamples(original, at: now)
+        XCTAssertEqual(retained.first, original.first { $0.date > now.addingTimeInterval(-8 * 86400) })
+        XCTAssertGreaterThan(retained.count, 4096)
+        XCTAssertLessThan(retained.count, original.count / 2)
+        let detailedSince = now.addingTimeInterval(-25 * 3600)
+        XCTAssertEqual(retained.filter { $0.date >= detailedSince }, original.filter { $0.date >= detailedSince })
+        XCTAssertEqual(UsageTrendStore.retainedSamples(retained, at: now), retained)
+        for window in UsageTrendWindow.allCases {
+            let before = try XCTUnwrap(UsageTrend.forecast(samples: original, at: now, window: window))
+            let after = try XCTUnwrap(UsageTrend.forecast(samples: retained, at: now, window: window))
+            XCTAssertEqual(before.rate, after.rate)
+            XCTAssertEqual(before.slowRate, after.slowRate)
+            XCTAssertEqual(before.fastRate, after.fastRate)
+            XCTAssertEqual(before.anchor, after.anchor)
+        }
+        try withStore { store, directory in
+            _ = try store.record(account: "a", windows: [window(60, reset: reset)], at: now)
+            let file = try XCTUnwrap(FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+                .first { $0.pathExtension == "json" })
+            try JSONEncoder().encode(["codex.primary": original]).write(to: file)
+            let loaded = try store.record(account: "a", windows: [], at: now)
+            XCTAssertEqual(loaded["codex.primary"], retained)
+            let appended = try store.record(account: "a", windows: [window(60, reset: reset)], at: now.addingTimeInterval(30))
+            XCTAssertLessThan(try XCTUnwrap(appended["codex.primary"]?.first).date, now.addingTimeInterval(-7 * 86400))
+            XCTAssertGreaterThan(appended["codex.primary"]?.count ?? 0, 4096)
+        }
+    }
+
+    func testOlderHistoryKeepsChangesAndSegmentEdgesWithinOneBucket() {
+        let first = UUID(), second = UUID()
+        let base = Date(timeIntervalSince1970: floor(now.timeIntervalSince1970 / 300) * 300 - 2 * 86400)
+        let values: [(Double, UUID)] = [(80, first), (80, first), (79, first), (79, first),
+                                        (79, second), (79, second), (79, second), (78, second)]
+        let samples = values.enumerated().map { index, value in
+            UsageTrendSample(date: base.addingTimeInterval(Double(index) * 30), remaining: value.0,
+                             reset: now.addingTimeInterval(86400), segment: value.1)
+        }
+        let retained = UsageTrendStore.retainedSamples(samples, at: now)
+        XCTAssertEqual(retained, [0, 1, 2, 3, 4, 6, 7].map { samples[$0] })
+        XCTAssertEqual(UsageTrendStore.retainedSamples(retained, at: now), retained)
+        XCTAssertEqual(UsageTrend.chartSamples(retained), UsageTrend.chartSamples(samples))
+    }
+
+    func testOlderFlatHistoryKeepsFixedFiveMinuteRepresentatives() {
+        let segment = UUID()
+        let base = Date(timeIntervalSince1970: floor(now.timeIntervalSince1970 / 300) * 300 - 2 * 86400)
+        let samples = (0..<40).map { index in
+            UsageTrendSample(date: base.addingTimeInterval(Double(index) * 30), remaining: 80,
+                             reset: now.addingTimeInterval(86400), segment: segment)
+        }
+        XCTAssertEqual(UsageTrendStore.retainedSamples(samples, at: now), [0, 9, 19, 29, 39].map { samples[$0] })
+        XCTAssertEqual(UsageTrendStore.retainedSamples([], at: now), [])
+        XCTAssertEqual(UsageTrendStore.retainedSamples([samples[0]], at: now), [samples[0]])
     }
 
     func testRetentionAndCorruptStorage() throws {

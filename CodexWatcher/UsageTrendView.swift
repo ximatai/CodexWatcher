@@ -50,67 +50,77 @@ struct UsageTrendView: View {
                 legend("预测", color: palette.warning, dashed: true)
             }
             TrendWindowPicker(forecastWindowHours: $forecastWindowHours)
-            Chart {
-                ForEach(Array(UsageTrend.chartSamples(history).enumerated()), id: \.offset) { _, sample in
-                    LineMark(x: .value("时间", sample.date), y: .value("剩余额度", sample.remaining),
-                             series: .value("采样分段", sample.segment.uuidString))
-                        .foregroundStyle(palette.accent)
-                        .lineStyle(StrokeStyle(lineWidth: 2))
-                    PointMark(x: .value("时间", sample.date), y: .value("剩余额度", sample.remaining))
-                        .foregroundStyle(palette.accent).symbolSize(8)
-                }
-                if let forecast {
-                    if let scenarioEnd = forecast.scenarioEnd(window: forecastWindow) {
-                        ForEach(0..<25, id: \.self) { index in
-                            let point = forecast.anchor.date.addingTimeInterval(scenarioEnd.timeIntervalSince(forecast.anchor.date) * Double(index) / 24)
-                            AreaMark(x: .value("时间", point),
-                                     yStart: .value("较快消耗", forecast.remaining(at: point, rate: forecast.fastRate)),
-                                     yEnd: .value("较慢消耗", forecast.remaining(at: point, rate: forecast.slowRate)))
-                                .foregroundStyle(LinearGradient(
-                                    colors: [palette.warning.opacity(0.12), palette.warning.opacity(0)],
-                                    startPoint: .leading, endPoint: .trailing))
-                                .alignsMarkStylesWithPlotArea(false)
+            GeometryReader { geometry in
+                let chartSamples = UsageTrend.chartSamples(history, domain: start...end, width: geometry.size.width)
+                let tickCount = max(2, min(6, Int(geometry.size.width / 85) + 1))
+                let dayAxis = (quota.windowDurationMins ?? 0) >= 2 * 1440 || end.timeIntervalSince(start) >= 2 * 86400
+                let axisDates = format.trendAxisDates(domain: start...end, dateOnly: dayAxis, desiredCount: tickCount)
+                Chart {
+                    ForEach(Array(chartSamples.enumerated()), id: \.offset) { _, sample in
+                        LineMark(x: .value("时间", sample.date), y: .value("剩余额度", sample.remaining),
+                                 series: .value("采样分段", sample.segment.uuidString))
+                            .foregroundStyle(palette.accent)
+                            .lineStyle(StrokeStyle(lineWidth: 2))
+                        PointMark(x: .value("时间", sample.date), y: .value("剩余额度", sample.remaining))
+                            .foregroundStyle(palette.accent).symbolSize(8)
+                    }
+                    if let forecast {
+                        if let scenarioEnd = forecast.scenarioEnd(window: forecastWindow) {
+                            ForEach(0..<25, id: \.self) { index in
+                                let point = forecast.anchor.date.addingTimeInterval(scenarioEnd.timeIntervalSince(forecast.anchor.date) * Double(index) / 24)
+                                AreaMark(x: .value("时间", point),
+                                         yStart: .value("较快消耗", forecast.remaining(at: point, rate: forecast.fastRate)),
+                                         yEnd: .value("较慢消耗", forecast.remaining(at: point, rate: forecast.slowRate)))
+                                    .foregroundStyle(LinearGradient(
+                                        colors: [palette.warning.opacity(0.12), palette.warning.opacity(0)],
+                                        startPoint: .leading, endPoint: .trailing))
+                                    .alignsMarkStylesWithPlotArea(false)
+                            }
+                        }
+                        let finish = min(end, forecast.exhaustion ?? end)
+                        ForEach([forecast.anchor.date, finish], id: \.self) { point in
+                            LineMark(x: .value("时间", point), y: .value("预测剩余", forecast.remaining(at: point)),
+                                     series: .value("预测", "forecast"))
+                                .foregroundStyle(palette.warning)
+                                .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 4]))
                         }
                     }
-                    let finish = min(end, forecast.exhaustion ?? end)
-                    ForEach([forecast.anchor.date, finish], id: \.self) { point in
-                        LineMark(x: .value("时间", point), y: .value("预测剩余", forecast.remaining(at: point)),
-                                 series: .value("预测", "forecast"))
-                            .foregroundStyle(palette.warning)
-                            .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 4]))
-                    }
-                }
-                RuleMark(x: .value("现在", date))
-                    .foregroundStyle(Color.secondary.opacity(0.5))
-                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
-                    .annotation(position: .top, alignment: .leading) {
-                        Text("现在").font(.system(size: 9)).foregroundStyle(.secondary)
-                    }
-                if let reset = quota.resetDate, reset > date {
-                    RuleMark(x: .value("重置", reset))
+                    RuleMark(x: .value("现在", date))
                         .foregroundStyle(Color.secondary.opacity(0.5))
                         .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
-                        .annotation(position: .top, alignment: .trailing) {
-                            Text("重置").font(.system(size: 9)).foregroundStyle(.secondary)
+                        .annotation(position: .top, alignment: .leading) {
+                            Text("现在").font(.system(size: 9)).foregroundStyle(.secondary)
                         }
-                }
-            }
-            .chartXScale(domain: start...end)
-            .chartYScale(domain: 0...100)
-            .chartYAxis {
-                AxisMarks(position: .leading, values: [0, 50, 100]) { value in
-                    AxisGridLine().foregroundStyle(palette.separator)
-                    AxisValueLabel {
-                        if let number = value.as(Double.self) { Text(format.percent(number)).font(.system(size: 9)) }
+                    if let reset = quota.resetDate, reset > date {
+                        RuleMark(x: .value("重置", reset))
+                            .foregroundStyle(Color.secondary.opacity(0.5))
+                            .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                            .annotation(position: .top, alignment: .trailing) {
+                                Text("重置").font(.system(size: 9)).foregroundStyle(.secondary)
+                            }
                     }
                 }
-            }
-            .chartXAxis {
-                AxisMarks(values: .automatic(desiredCount: 3)) { value in
-                    AxisValueLabel {
-                        if let point = value.as(Date.self) {
-                            Text(end.timeIntervalSince(start) < 86400 ? format.date(point, timeOnly: true) : format.compactDate(point))
-                                .font(.system(size: 9))
+                .chartXScale(domain: start...end)
+                .chartYScale(domain: 0...100)
+                .chartYAxis {
+                    AxisMarks(position: .leading, values: [0, 50, 100]) { value in
+                        AxisGridLine().foregroundStyle(palette.separator)
+                        AxisValueLabel {
+                            if let number = value.as(Double.self) { Text(format.percent(number)).font(.system(size: 9)) }
+                        }
+                    }
+                }
+                .chartXAxis {
+                    AxisMarks(values: axisDates) { value in
+                        let point = value.as(Date.self)
+                        let fraction = point.map { $0.timeIntervalSince(start) / end.timeIntervalSince(start) } ?? 0.5
+                        AxisValueLabel(anchor: fraction < 0.1 ? .topLeading : fraction > 0.9 ? .topTrailing : .top,
+                                       collisionResolution: .greedy(minimumSpacing: 8)) {
+                            if let point {
+                                Text(format.trendAxisDate(point, domain: start...end, dateOnly: dayAxis))
+                                    .font(.system(size: 9))
+                                    .multilineTextAlignment(.center)
+                            }
                         }
                     }
                 }

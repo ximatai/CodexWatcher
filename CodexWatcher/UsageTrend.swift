@@ -32,6 +32,28 @@ final class UsageTrendStore: @unchecked Sendable {
         }
     }
 
+    /// Keep prediction inputs intact for 25 hours. Older history keeps the last
+    /// reading in each fixed five-minute bucket, plus change and segment edges.
+    /// Selecting original points makes repeated compaction idempotent.
+    static func retainedSamples(_ samples: [UsageTrendSample], at date: Date) -> [UsageTrendSample] {
+        let retained = samples.filter { $0.date > date.addingTimeInterval(-8 * 86400) }
+        let detailedSince = date.addingTimeInterval(-25 * 3600)
+        return retained.indices.compactMap { index in
+            let sample = retained[index]
+            guard sample.date < detailedSince, index > 0, index < retained.count - 1 else { return sample }
+            let previous = retained[index - 1], next = retained[index + 1]
+            if previous.segment != sample.segment || sample.segment != next.segment
+                || previous.reset != sample.reset || sample.reset != next.reset
+                || previous.remaining != sample.remaining || sample.remaining != next.remaining
+                || sample.date.timeIntervalSince(previous.date) > UsageTrend.maximumGap
+                || next.date.timeIntervalSince(sample.date) > UsageTrend.maximumGap {
+                return sample
+            }
+            return floor(sample.date.timeIntervalSince1970 / 300) != floor(next.date.timeIntervalSince1970 / 300)
+                ? sample : nil
+        }
+    }
+
     private func file(account: String) -> URL {
         let key = SHA256.hash(data: Data(account.utf8)).map { String(format: "%02x", $0) }.joined()
         return directory.appendingPathComponent("usage-trend-\(key).json")
@@ -69,9 +91,7 @@ final class UsageTrendStore: @unchecked Sendable {
             }
         }
         for key in Array(history.keys) {
-            history[key] = Array(history[key, default: []].filter {
-                $0.date > date.addingTimeInterval(-8 * 86400)
-            }.suffix(4096))
+            history[key] = Self.retainedSamples(history[key, default: []], at: date)
             if history[key]?.isEmpty == true { history.removeValue(forKey: key) }
         }
         for window in windows {
@@ -99,7 +119,7 @@ final class UsageTrendStore: @unchecked Sendable {
             }
             samples.append(UsageTrendSample(date: date, remaining: remaining, reset: continuous ? last!.reset : reset,
                                            segment: continuous ? last!.segment : UUID()))
-            history[window.id] = Array(samples.suffix(4096))
+            history[window.id] = samples
         }
         try JSONEncoder().encode(history).write(to: file, options: .atomic)
         try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
@@ -174,6 +194,41 @@ enum UsageTrend {
             }
             return sample
         }
+    }
+
+    /// Display-only reduction: retain first/last and extrema in each one-point
+    /// horizontal bin. Flush at segment boundaries so disconnected lines stay so.
+    static func chartSamples(_ samples: [UsageTrendSample], domain: ClosedRange<Date>, width: Double) -> [UsageTrendSample] {
+        let points = chartSamples(samples)
+        let duration = domain.upperBound.timeIntervalSince(domain.lowerBound)
+        guard points.count > 2, duration.isFinite, duration > 0, width.isFinite else { return points }
+        let bins = max(1, Int(min(2048, max(0, width))))
+        var selected: [UsageTrendSample] = []
+        var first = 0, lowest = 0, highest = 0
+        func bucket(_ sample: UsageTrendSample) -> Int {
+            let fraction = sample.date.timeIntervalSince(domain.lowerBound) / duration
+            guard fraction.isFinite else { return 0 }
+            return Int(min(Double(bins - 1), max(0, floor(fraction * Double(bins)))))
+        }
+        func appendGroup(through last: Int) {
+            for index in Set([first, lowest, highest, last]).sorted() { selected.append(points[index]) }
+        }
+        var currentBucket = bucket(points[0])
+        for index in 1..<points.count {
+            let nextBucket = bucket(points[index])
+            if nextBucket != currentBucket || points[index].segment != points[index - 1].segment {
+                appendGroup(through: index - 1)
+                first = index
+                lowest = index
+                highest = index
+                currentBucket = nextBucket
+            } else {
+                if points[index].remaining < points[lowest].remaining { lowest = index }
+                if points[index].remaining > points[highest].remaining { highest = index }
+            }
+        }
+        appendGroup(through: points.count - 1)
+        return selected
     }
 
     static let maximumGap: TimeInterval = 900

@@ -85,6 +85,42 @@ final class PresentationFormatTests: XCTestCase {
         XCTAssertTrue(format.compactDate(nextYear, relativeTo: reference).contains("01:32"))
     }
 
+    func testTrendAxisUsesDatesForDaysAndDisambiguatesShortMidnightRanges() throws {
+        let parser = ISO8601DateFormatter()
+        func date(_ value: String) throws -> Date { try XCTUnwrap(parser.date(from: value)) }
+        let start = try date("2026-11-02T22:00:00+08:00")
+        let next = try date("2026-11-03T02:00:00+08:00")
+        let later = try date("2026-11-07T02:00:00+08:00")
+        for language in ["zh_CN", "en_US", "en_GB"] {
+            let format = PresentationFormat(locale: Locale(identifier: language), timeZone: shanghai)
+            let longLabel = format.trendAxisDate(next, domain: start...later)
+            XCTAssertFalse(longLabel.contains(":"))
+            XCTAssertFalse(longLabel.contains("2026"))
+            XCTAssertTrue(format.trendAxisDate(next, domain: start...next).contains("\n"))
+            let sameDay = try date("2026-11-02T23:00:00+08:00")
+            XCTAssertEqual(format.trendAxisDate(sameDay, domain: start...sameDay), format.date(sameDay, timeOnly: true))
+            let newYear = try date("2027-01-02T02:00:00+08:00")
+            XCTAssertTrue(format.trendAxisDate(newYear, domain: start...newYear).contains("2027"))
+        }
+    }
+
+    func testWeeklyAxisStaysDateOnlyEvenWithLessThanOneDayOfVisibleHistory() throws {
+        let parser = ISO8601DateFormatter()
+        let start = try XCTUnwrap(parser.date(from: "2026-11-02T13:17:00+08:00"))
+        let end = start.addingTimeInterval(3600)
+        let format = PresentationFormat(locale: Locale(identifier: "en_GB"), timeZone: shanghai)
+        XCTAssertFalse(format.trendAxisDate(start, domain: start...end, dateOnly: true).contains(":"))
+        XCTAssertEqual(format.trendAxisDates(domain: start...end, dateOnly: true, desiredCount: 4), [start])
+        let shortTicks = format.trendAxisDates(domain: start...start.addingTimeInterval(9000), dateOnly: false, desiredCount: 4)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = shanghai
+        XCTAssertFalse(shortTicks.isEmpty)
+        XCTAssertTrue(shortTicks.allSatisfy { calendar.component(.minute, from: $0) % 30 == 0 && calendar.component(.second, from: $0) == 0 })
+        let dayTicks = format.trendAxisDates(domain: start...start.addingTimeInterval(6 * 86400), dateOnly: true, desiredCount: 4)
+        XCTAssertGreaterThanOrEqual(dayTicks.count, 2)
+        XCTAssertTrue(dayTicks.allSatisfy { calendar.component(.hour, from: $0) == 0 && calendar.component(.minute, from: $0) == 0 })
+    }
+
     func testKnownCardLabelsAreLocalizedAndUnknownTitlesSurvive() {
         let format = PresentationFormat(locale: Locale(identifier: "zh_CN"), timeZone: shanghai)
         XCTAssertEqual(format.creditTitle("Full reset"), "完整额度重置卡")
