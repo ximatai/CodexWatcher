@@ -288,12 +288,13 @@ final class UsageTrendTests: XCTestCase {
             inside.append(sample(0, 78))
             let predecessor = sample(-window.lookback - 299, 80.1)
             for readings in [inside, [predecessor] + inside] {
-                if window == .hour {
+                if window != .day {
                     let forecast = try XCTUnwrap(UsageTrend.forecast(samples: readings, at: now, window: window))
-                    XCTAssertEqual(forecast.rate * 3600, 2, accuracy: 0.001)
+                    let coveredDuration = now.timeIntervalSince(max(readings[0].date, now.addingTimeInterval(-window.lookback)))
+                    XCTAssertEqual(forecast.rate, 2 / coveredDuration, accuracy: 0.000000001)
                     XCTAssertEqual(forecast.fastRate, forecast.rate * 1.5, accuracy: 0.000000001)
                 } else if case .insufficientSignal = UsageTrend.assess(samples: readings, at: now, window: window) {
-                    // Outside-window steps must not unlock a long-window forecast.
+                    // Outside-window steps must not unlock a 24-hour forecast.
                 } else {
                     XCTFail("Boundary interpolation must not manufacture a third in-window step")
                 }

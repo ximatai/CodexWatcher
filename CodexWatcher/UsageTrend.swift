@@ -313,10 +313,10 @@ enum UsageTrend {
         guard let step = steps.min() else { return .insufficientSignal }
         let strongSignal = steps.count >= 3 && observedDrop + 0.000001 >= max(1, 3 * step)
         if !strongSignal {
-            // Integer quota readings often change only once per hour. Use the
-            // observed average, not a step's position in a regression, for a
-            // coarse hourly estimate. The +/-1pp scenarios reflect rounding.
-            guard window == .hour, observedDrop + 0.000001 >= 1 else { return .insufficientSignal }
+            // Sparse integer readings support an observed average. The +/-1pp
+            // scenarios reflect rounding.
+            let supportsCoarseEstimate = window == .hour || (window == .eightHours && steps.count >= 2)
+            guard supportsCoarseEstimate, observedDrop + 0.000001 >= 1 else { return .insufficientSignal }
             return .ready(UsageTrendForecast(anchor: last, rate: observedDrop / observedDuration,
                 slowRate: max(0, observedDrop - 1) / observedDuration,
                 fastRate: (observedDrop + 1) / observedDuration))
