@@ -110,6 +110,8 @@
 	<string>刷新</string>
 	<key>刷新额度</key>
 	<string>刷新额度</string>
+	<key>刷新额度并检查更新</key>
+	<string>刷新额度并检查更新</string>
 	<key>前往下载</key>
 	<string>前往下载</string>
 	<key>剩余 %@</key>

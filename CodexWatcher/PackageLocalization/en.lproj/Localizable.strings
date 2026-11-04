@@ -108,6 +108,8 @@ This runs even when quota is plentiful or unused. Consumed credits cannot be res
 	<string>Refresh</string>
 	<key>刷新额度</key>
 	<string>Refresh quota</string>
+	<key>刷新额度并检查更新</key>
+	<string>Refresh quota and check for updates</string>
 	<key>前往下载</key>
 	<string>Download</string>
 	<key>剩余 %@</key>

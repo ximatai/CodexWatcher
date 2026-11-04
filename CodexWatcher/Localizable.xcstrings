@@ -4527,6 +4527,23 @@
           }
         }
       }
+    },
+    "刷新额度并检查更新": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refresh quota and check for updates"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刷新额度并检查更新"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

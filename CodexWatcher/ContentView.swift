@@ -76,6 +76,9 @@ private struct DashboardContent: View {
             VStack(spacing: 0) {
                 VStack(spacing: 12) {
                     header
+                    if let updates, let version = updates.availableVersion {
+                        updateNotice(version: version, updates: updates)
+                    }
                     feedback
                     separator
                 }
@@ -201,7 +204,7 @@ private struct DashboardContent: View {
                 }
             }
             Spacer(minLength: 0)
-            Button { Task { await monitor.refresh() } } label: {
+            Button { refreshManually() } label: {
                 ZStack {
                     if monitor.isBusy { ProgressView().controlSize(.small) }
                     else { Image(systemName: "arrow.clockwise").font(.system(size: 15, weight: .medium)) }
@@ -212,8 +215,41 @@ private struct DashboardContent: View {
             .buttonStyle(.plain)
             .modifier(ControlHoverFeedback(color: palette.accent, cornerRadius: 15))
             .disabled(monitor.isBusy)
-            .help("刷新额度").accessibilityLabel("刷新额度")
+            .help("刷新额度并检查更新").accessibilityLabel("刷新额度")
         }
+    }
+
+    private func refreshManually() {
+        Task { await monitor.refresh() }
+        Task { await updates?.check(force: true) }
+    }
+
+    private func updateNotice(version: ReleaseVersion, updates: ReleaseUpdateChecker) -> some View {
+        Button {
+            dismissForPresentation()
+            updates.openAvailableRelease()
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "arrow.down.circle.fill")
+                    .accessibilityHidden(true)
+                Text(L10n.text("发现新版本 \(version.description)", locale: locale))
+                    .lineLimit(1)
+                Spacer(minLength: 4)
+                Text("前往下载").fontWeight(.medium).fixedSize()
+                Image(systemName: "arrow.up.right")
+                    .font(.system(size: 10, weight: .semibold))
+                    .accessibilityHidden(true)
+            }
+            .font(.system(size: 12))
+            .foregroundStyle(palette.accent)
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(palette.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+            .contentShape(RoundedRectangle(cornerRadius: 8))
+        }
+        .buttonStyle(.plain)
+        .modifier(ControlHoverFeedback(color: palette.accent, cornerRadius: 8))
+        .accessibilityIdentifier("release-update-notice")
     }
 
     private var welcome: some View {
@@ -420,7 +456,7 @@ private struct DashboardContent: View {
                 HStack {
                     Label("数据待更新", systemImage: "clock").foregroundStyle(palette.warning)
                     Spacer()
-                    Button("刷新") { Task { await monitor.refresh() } }.disabled(monitor.isBusy)
+                    Button("刷新") { refreshManually() }.disabled(monitor.isBusy)
                 }.font(.caption)
             }
         }
@@ -573,7 +609,7 @@ private struct DashboardContent: View {
                         Button("选择 CLI…", action: chooseExecutable)
                             .disabled(monitor.isBusy || monitor.loginID != nil)
                     } else {
-                        Button("重新读取") { Task { await monitor.refresh() } }.disabled(monitor.isBusy)
+                        Button("重新读取") { refreshManually() }.disabled(monitor.isBusy)
                     }
                 }.font(.caption)
             }
