@@ -136,6 +136,10 @@ This runs even when quota is plentiful or unused. Consumed credits cannot be res
 	<string>Original quota window unavailable</string>
 	<key>参考时段</key>
 	<string>Reference period</string>
+	<key>参考跨度 %@</key>
+	<string>Based on %@</string>
+	<key>参考跨度 %@ · 含采样缺口</key>
+	<string>Based on %@ · sampling gaps</string>
 	<key>参考进度</key>
 	<string>Reference pace</string>
 	<key>发现新版本 %@</key>
@@ -384,6 +388,12 @@ This runs even when quota is plentiful or unused. Consumed credits cannot be res
 	<string>Waiting for browser login…</string>
 	<key>等待重置更新</key>
 	<string>Waiting for reset update</string>
+	<key>粗估可用到本次重置</key>
+	<string>Estimated to last until reset</string>
+	<key>粗估约%@后耗尽</key>
+	<string>Roughly %@ until exhausted</string>
+	<key>粗估采用参考跨度内首尾额度变化；阴影仅反映读数误差情景，未涵盖未来使用变化。</key>
+	<string>The rough estimate uses the quota change between reference endpoints. Shading reflects reading uncertainty only and does not cover future usage changes.</string>
 	<key>约%@后耗尽</key>
 	<string>Empty in ~%@</string>
 	<key>自动 hello 回合标识无效。</key>
@@ -456,6 +466,8 @@ This runs even when quota is plentiful or unused. Consumed credits cannot be res
 	<string>Slower consumption</string>
 	<key>近期无消耗</key>
 	<string>No recent consumption</string>
+	<key>近期消耗较低（粗估）</key>
+	<string>Low recent consumption (rough estimate)</string>
 	<key>返回进度</key>
 	<string>Back to progress</string>
 	<key>连接已关闭。</key>

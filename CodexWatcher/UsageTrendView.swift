@@ -153,7 +153,9 @@ struct UsageTrendView: View {
         .padding(12)
         .background(palette.surface, in: RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(palette.separator))
-        .help(L10n.text("按\(L10n.text(forecastWindow.title, locale: locale))有效采样估算；阴影为消耗情景范围，仅供参考。", locale: locale))
+        .help(forecast?.referenceDuration != nil
+              ? L10n.text("粗估采用参考跨度内首尾额度变化；阴影仅反映读数误差情景，未涵盖未来使用变化。", locale: locale)
+              : L10n.text("按\(L10n.text(forecastWindow.title, locale: locale))有效采样估算；阴影为消耗情景范围，仅供参考。", locale: locale))
     }
 
     private func summaryLabel(_ summary: String, warning: Bool) -> some View {
@@ -179,6 +181,13 @@ struct UsageTrendView: View {
         }
         if case .insufficientSignal = assessment { return L10n.text("消耗变化太少，暂不预测") }
         guard let forecast else { return String(localized: "正在积累数据") }
+        if forecast.referenceDuration != nil {
+            if forecast.rate == 0 { return L10n.text("近期消耗较低（粗估）", locale: locale) }
+            if let exhaustion = forecast.exhaustion, let reset = quota.resetDate, exhaustion < reset {
+                return L10n.text("粗估约\(format.duration(max(0, exhaustion.timeIntervalSince(date)), compact: true))后耗尽", locale: locale)
+            }
+            return L10n.text("粗估可用到本次重置", locale: locale)
+        }
         guard let exhaustion = forecast.exhaustion else { return String(localized: "近期无消耗") }
         if let reset = quota.resetDate, exhaustion < reset {
             return L10n.text("约\(format.duration(max(0, exhaustion.timeIntervalSince(date)), compact: true))后耗尽", locale: locale)
@@ -187,6 +196,12 @@ struct UsageTrendView: View {
     }
 
     private func secondarySummary(forecast: UsageTrendForecast?) -> String? {
+        if let forecast, let duration = forecast.referenceDuration {
+            let span = format.duration(duration, compact: true)
+            return forecast.hasSamplingGaps
+                ? L10n.text("参考跨度 \(span) · 含采样缺口", locale: locale)
+                : L10n.text("参考跨度 \(span)", locale: locale)
+        }
         guard let exhaustion = forecast?.exhaustion, let reset = quota.resetDate,
               exhaustion < reset else { return nil }
         return L10n.text("比重置早\(format.duration(reset.timeIntervalSince(exhaustion), compact: true))", locale: locale)

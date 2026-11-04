@@ -207,7 +207,44 @@ final class UsageTrendTests: XCTestCase {
         }
     }
 
-    func testCoverageRequiresMinimumObservedTimeForSelectedWindow() throws {
+    func testEarlyConsumptionMissedByGridStillGetsCoarseEstimate() throws {
+        for window in UsageTrendWindow.allCases {
+            let segment = UUID(), reset = now.addingTimeInterval(7 * 86400)
+            var samples = stride(from: -window.lookback + 1, through: 0, by: 30).map { offset in
+                UsageTrendSample(date: now.addingTimeInterval(offset),
+                    remaining: 80 - min(3, floor((offset + window.lookback - 1) / 30)),
+                    reset: reset, segment: segment)
+            }
+            samples.append(UsageTrendSample(date: now, remaining: 77, reset: reset, segment: segment))
+            let forecast = try XCTUnwrap(UsageTrend.forecast(samples: samples, at: now, window: window))
+            XCTAssertEqual(forecast.referenceDuration, window.lookback - 1)
+            XCTAssertEqual(forecast.rate * (window.lookback - 1), 3, accuracy: 0.000001)
+        }
+    }
+
+    func testEndpointEstimateRequiresHalfWindowAndRepresentsFlatReadingUncertainty() throws {
+        for window in UsageTrendWindow.allCases {
+            let segment = UUID(), reset = now.addingTimeInterval(7 * 86400)
+            func samples(span: Double, drop: Double) -> [UsageTrendSample] {
+                [UsageTrendSample(date: now.addingTimeInterval(-span), remaining: 80,
+                    reset: reset, segment: segment),
+                 UsageTrendSample(date: now, remaining: 80 - drop, reset: reset, segment: segment)]
+            }
+            let span = window.lookback / 2
+            for drop in [0.0, 1, 4] {
+                let forecast = try XCTUnwrap(UsageTrend.forecast(samples: samples(span: span, drop: drop),
+                    at: now, window: window))
+                XCTAssertEqual(forecast.referenceDuration, span)
+                XCTAssertEqual(forecast.rate * span, drop, accuracy: 0.000001)
+                XCTAssertEqual(forecast.fastRate * span, drop + 1, accuracy: 0.000001)
+                XCTAssertTrue(forecast.hasSamplingGaps)
+                XCTAssertFalse(forecast.scenarioDates.isEmpty)
+            }
+            XCTAssertNil(UsageTrend.forecast(samples: samples(span: span - 1, drop: 4), at: now, window: window))
+        }
+    }
+
+    func testShorterReferenceUsesCoarseEstimateButTenMinutesIsInsufficient() throws {
         for window in UsageTrendWindow.allCases {
             func samples(start: Double) -> [UsageTrendSample] {
                 let segment = UUID()
@@ -218,9 +255,8 @@ final class UsageTrendTests: XCTestCase {
             }
             let boundary = -window.minimumObservedDuration
             XCTAssertNotNil(UsageTrend.forecast(samples: samples(start: boundary), at: now, window: window))
-            guard case .insufficientCoverage = UsageTrend.assess(samples: samples(start: boundary + 1), at: now, window: window) else {
-                return XCTFail("Incomplete \(window) window must not be forecast")
-            }
+            let coarse = try XCTUnwrap(UsageTrend.forecast(samples: samples(start: boundary + 1), at: now, window: window))
+            XCTAssertNotNil(coarse.referenceDuration)
             guard case .insufficientCoverage = UsageTrend.assess(samples: samples(start: -600), at: now, window: window) else {
                 return XCTFail("Ten minutes cannot represent \(window)")
             }
@@ -257,21 +293,23 @@ final class UsageTrendTests: XCTestCase {
             UsageTrendSample(date: now.addingTimeInterval(offset), remaining: offset < -1800 ? 50 : 49.5,
                 reset: reset, segment: segment)
         }
-        guard case .insufficientSignal = UsageTrend.assess(samples: smallDrop, at: now) else {
-            return XCTFail("A sub-percentage-point isolated step should remain insufficient")
-        }
+        let small = try XCTUnwrap(UsageTrend.forecast(samples: smallDrop, at: now))
+        XCTAssertNotNil(small.referenceDuration)
+        XCTAssertEqual(small.rate * 3600, 0.5, accuracy: 0.000001)
+        XCTAssertEqual(small.slowRate, 0)
     }
 
-    func testSingleStepStillDoesNotUnlockLongWindowForecast() {
+    func testSingleStepSupportsCoarseLongWindowForecast() throws {
         let segment = UUID(), reset = now.addingTimeInterval(86400)
         for window in [UsageTrendWindow.eightHours, .day] {
             let samples = stride(from: -window.lookback, through: 0, by: 300).map { offset in
                 UsageTrendSample(date: now.addingTimeInterval(offset), remaining: offset < -3600 ? 50 : 49,
                     reset: reset, segment: segment)
             }
-            guard case .insufficientSignal = UsageTrend.assess(samples: samples, at: now, window: window) else {
-                return XCTFail("Only the hourly window may use a coarse single-step forecast")
-            }
+            let forecast = try XCTUnwrap(UsageTrend.forecast(samples: samples, at: now, window: window))
+            XCTAssertEqual(forecast.referenceDuration, window.lookback)
+            XCTAssertEqual(forecast.rate * window.lookback, 1, accuracy: 0.000001)
+            XCTAssertEqual(forecast.slowRate, 0)
         }
     }
 
@@ -288,16 +326,11 @@ final class UsageTrendTests: XCTestCase {
             inside.append(sample(0, 78))
             let predecessor = sample(-window.lookback - 299, 80.1)
             for readings in [inside, [predecessor] + inside] {
-                if window != .day {
-                    let forecast = try XCTUnwrap(UsageTrend.forecast(samples: readings, at: now, window: window))
-                    let coveredDuration = now.timeIntervalSince(max(readings[0].date, now.addingTimeInterval(-window.lookback)))
-                    XCTAssertEqual(forecast.rate, 2 / coveredDuration, accuracy: 0.000000001)
-                    XCTAssertEqual(forecast.fastRate, forecast.rate * 1.5, accuracy: 0.000000001)
-                } else if case .insufficientSignal = UsageTrend.assess(samples: readings, at: now, window: window) {
-                    // Outside-window steps must not unlock a 24-hour forecast.
-                } else {
-                    XCTFail("Boundary interpolation must not manufacture a third in-window step")
-                }
+                let forecast = try XCTUnwrap(UsageTrend.forecast(samples: readings, at: now, window: window))
+                let duration = window.lookback - 1
+                XCTAssertEqual(forecast.referenceDuration, duration)
+                XCTAssertEqual(forecast.rate, 2 / duration, accuracy: 0.000000001)
+                XCTAssertEqual(forecast.fastRate, forecast.rate * 1.5, accuracy: 0.000000001)
             }
         }
     }
@@ -312,9 +345,10 @@ final class UsageTrendTests: XCTestCase {
             let inside = stride(from: -window.lookback + 299, through: -1, by: 300).map { sample($0, 55) }
                 + [sample(0, 55)]
             let crossing = [sample(-window.lookback - 1, 60)] + inside
-            guard case .insufficientSignal = UsageTrend.assess(samples: crossing, at: now, window: window) else {
-                return XCTFail("A cutoff-straddling drop must not be labelled no consumption")
-            }
+            let low = try XCTUnwrap(UsageTrend.forecast(samples: crossing, at: now, window: window))
+            XCTAssertNotNil(low.referenceDuration)
+            XCTAssertEqual(low.rate, 0)
+            XCTAssertGreaterThan(low.fastRate, 0)
             let outside = [sample(-window.lookback - 600, 60), sample(-window.lookback - 1, 55)] + inside
             let forecast = try XCTUnwrap(UsageTrend.forecast(samples: outside, at: now, window: window))
             XCTAssertEqual(forecast.rate, 0)
@@ -322,7 +356,7 @@ final class UsageTrendTests: XCTestCase {
         }
     }
 
-    func testLongGapStraddlingCutoffCannotBeReportedAsZeroConsumption() {
+    func testLongGapStraddlingCutoffUsesOnlyInWindowReference() throws {
         let before = UUID(), after = UUID(), reset = now.addingTimeInterval(86400)
         for window in [UsageTrendWindow.eightHours, .day] {
             let start = window == .day ? -20 * 3600.0 : -6 * 3600.0
@@ -331,9 +365,10 @@ final class UsageTrendTests: XCTestCase {
             let inside = stride(from: start, through: 0, by: 300).map { offset in
                 UsageTrendSample(date: now.addingTimeInterval(offset), remaining: 55, reset: reset, segment: after)
             }
-            guard case .insufficientSignal = UsageTrend.assess(samples: [predecessor] + inside, at: now, window: window) else {
-                return XCTFail("Missing boundary interpolation must not turn an uncertain drop into no consumption")
-            }
+            let low = try XCTUnwrap(UsageTrend.forecast(samples: [predecessor] + inside, at: now, window: window))
+            XCTAssertEqual(low.referenceDuration, -start)
+            XCTAssertEqual(low.rate, 0)
+            XCTAssertGreaterThan(low.fastRate, 0)
         }
     }
 
@@ -352,7 +387,7 @@ final class UsageTrendTests: XCTestCase {
         }
     }
 
-    func testBoundaryInterpolationCannotSupplyMinimumNetConsumption() {
+    func testBoundaryInterpolationCannotInflateCoarseConsumption() throws {
         let segment = UUID()
         func sample(_ offset: Double, _ remaining: Double) -> UsageTrendSample {
             UsageTrendSample(date: now.addingTimeInterval(offset), remaining: remaining,
@@ -364,9 +399,9 @@ final class UsageTrendTests: XCTestCase {
         inside.append(sample(0, 79.1))
         // Interpolation at -3600 adds almost 1pp, but actual in-window readings lost only 0.9pp.
         for readings in [inside, [sample(-3601, 81)] + inside] {
-            guard case .insufficientSignal = UsageTrend.assess(samples: readings, at: now) else {
-                return XCTFail("Only observed in-window consumption can meet the 1pp signal floor")
-            }
+            let forecast = try XCTUnwrap(UsageTrend.forecast(samples: readings, at: now))
+            XCTAssertEqual(forecast.referenceDuration, 3301)
+            XCTAssertEqual(forecast.rate * 3301, 0.9, accuracy: 0.000001)
         }
     }
 
@@ -396,15 +431,16 @@ final class UsageTrendTests: XCTestCase {
         XCTAssertLessThan(forecast.fastRate * 3600, 6)
     }
 
-    func testMissingIntervalsAreNotInterpolatedEvenWithMatchingSegment() {
+    func testMissingIntervalsUseEndpointAverageWithoutInterpolation() throws {
         let segment = UUID()
         let samples = stride(from: -3600.0, through: 0, by: 300).filter { $0 <= -2100 || $0 >= -600 }.map {
             UsageTrendSample(date: now.addingTimeInterval($0), remaining: 60 - $0 / 300,
                              reset: now.addingTimeInterval(9000), segment: segment)
         }
-        guard case .insufficientCoverage = UsageTrend.assess(samples: samples, at: now) else {
-            return XCTFail("A 25-minute gap must not be filled")
-        }
+        let forecast = try XCTUnwrap(UsageTrend.forecast(samples: samples, at: now))
+        XCTAssertTrue(forecast.hasSamplingGaps)
+        XCTAssertEqual(forecast.referenceDuration, 3600)
+        XCTAssertEqual(forecast.rate * 3600, 12, accuracy: 0.000001)
     }
 
     func testLongWindowsUseBothSidesOfReadGapsAtRealElapsedTimes() throws {
@@ -440,19 +476,21 @@ final class UsageTrendTests: XCTestCase {
         }
         XCTAssertNotNil(UsageTrend.forecast(samples: samples, at: now, window: .day))
         let lessCoverage = samples.filter { $0.date != now.addingTimeInterval(-8 * 3600) }
-        guard case .insufficientCoverage = UsageTrend.assess(samples: lessCoverage, at: now, window: .day) else {
-            return XCTFail("More than eight hours without observations must fail coverage")
-        }
+        let lessCoverageForecast = try XCTUnwrap(UsageTrend.forecast(samples: lessCoverage, at: now, window: .day))
+        XCTAssertEqual(lessCoverageForecast.referenceDuration, 86400)
+        XCTAssertTrue(lessCoverageForecast.hasSamplingGaps)
+        XCTAssertEqual(lessCoverageForecast.rate * 3600, 2, accuracy: 0.000001)
         let hourlyOnly = stride(from: -86400.0, through: 0, by: 3600).map { offset in
             UsageTrendSample(date: now.addingTimeInterval(offset), remaining: 40 - offset / 1800,
                 reset: now.addingTimeInterval(86400), segment: before)
         }
-        guard case .insufficientCoverage = UsageTrend.assess(samples: hourlyOnly, at: now, window: .day) else {
-            return XCTFail("Exact hourly grid points do not establish continuous observed coverage")
-        }
+        let hourlyOnlyForecast = try XCTUnwrap(UsageTrend.forecast(samples: hourlyOnly, at: now, window: .day))
+        XCTAssertEqual(hourlyOnlyForecast.referenceDuration, 86400)
+        XCTAssertTrue(hourlyOnlyForecast.hasSamplingGaps)
+        XCTAssertEqual(hourlyOnlyForecast.rate * 3600, 2, accuracy: 0.000001)
     }
 
-    func testUnobservedGapDropsCannotSupplyConsumptionEvidence() {
+    func testGapDropCanSupplyCoarseWholeWindowConsumption() throws {
         let before = UUID(), after = UUID()
         let samples = stride(from: -86400.0, through: 0, by: 300).filter {
             $0 <= -12 * 3600 || $0 >= -11 * 3600
@@ -462,9 +500,10 @@ final class UsageTrendTests: XCTestCase {
             return UsageTrendSample(date: now.addingTimeInterval(offset), remaining: remaining,
                 reset: now.addingTimeInterval(86400), segment: older ? before : after)
         }
-        guard case .insufficientSignal = UsageTrend.assess(samples: samples, at: now, window: .day) else {
-            return XCTFail("A drop during an unobserved gap is not measured consumption signal")
-        }
+        let forecast = try XCTUnwrap(UsageTrend.forecast(samples: samples, at: now, window: .day))
+        XCTAssertTrue(forecast.hasSamplingGaps)
+        XCTAssertEqual(forecast.referenceDuration, 86400)
+        XCTAssertEqual(forecast.rate * 86400, 10, accuracy: 0.000001)
     }
 
     func testRecoveryDeadlineChangeAndUnexplainedSegmentsStillBlockPooling() {

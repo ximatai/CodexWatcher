@@ -138,6 +138,10 @@
 	<string>原额度窗口不可用</string>
 	<key>参考时段</key>
 	<string>参考时段</string>
+	<key>参考跨度 %@</key>
+	<string>参考跨度 %@</string>
+	<key>参考跨度 %@ · 含采样缺口</key>
+	<string>参考跨度 %@ · 含采样缺口</string>
 	<key>参考进度</key>
 	<string>参考进度</string>
 	<key>发现新版本 %@</key>
@@ -386,6 +390,12 @@
 	<string>等待浏览器完成登录…</string>
 	<key>等待重置更新</key>
 	<string>等待重置更新</string>
+	<key>粗估可用到本次重置</key>
+	<string>粗估可用到本次重置</string>
+	<key>粗估约%@后耗尽</key>
+	<string>粗估约%@后耗尽</string>
+	<key>粗估采用参考跨度内首尾额度变化；阴影仅反映读数误差情景，未涵盖未来使用变化。</key>
+	<string>粗估采用参考跨度内首尾额度变化；阴影仅反映读数误差情景，未涵盖未来使用变化。</string>
 	<key>约%@后耗尽</key>
 	<string>约%@后耗尽</string>
 	<key>自动 hello 回合标识无效。</key>
@@ -458,6 +468,8 @@
 	<string>较慢消耗</string>
 	<key>近期无消耗</key>
 	<string>近期无消耗</string>
+	<key>近期消耗较低（粗估）</key>
+	<string>近期消耗较低（粗估）</string>
 	<key>返回进度</key>
 	<string>返回进度</string>
 	<key>连接已关闭。</key>

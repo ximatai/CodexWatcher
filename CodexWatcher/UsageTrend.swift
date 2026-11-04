@@ -132,10 +132,12 @@ struct UsageTrendForecast {
     let rate: Double // percentage points per second
     let slowRate: Double
     let fastRate: Double
+    var referenceDuration: TimeInterval? = nil
+    var hasSamplingGaps = false
     /// Both bounds are straight lines clipped at zero. Include their exact
     /// exhaustion times so the full-range polygon preserves each corner.
     var scenarioDates: [Date] {
-        guard rate > 0, fastRate > slowRate, anchor.reset > anchor.date,
+        guard fastRate > slowRate, anchor.reset > anchor.date,
               (fastRate - slowRate) * anchor.reset.timeIntervalSince(anchor.date) > 0.000001 else { return [] }
         var dates = [anchor.date, anchor.reset]
         for speed in [slowRate, fastRate] where speed > 0 {
@@ -264,9 +266,25 @@ enum UsageTrend {
             if a.date <= cutoff { break }
         }
         let recent = Array(samples[firstIndex...])
-        guard recent.count >= 3, let first = recent.first else { return .insufficientCoverage }
+        guard recent.count >= 2, let first = recent.first else { return .insufficientCoverage }
+        // Use only endpoints inside the selected window. A boundary-straddling
+        // decline cannot be assigned to this window.
+        let inWindow = recent.filter { $0.date >= cutoff }
+        func coarseEstimate(or failure: UsageTrendAssessment) -> UsageTrendAssessment {
+            guard let start = inWindow.first else { return failure }
+            let duration = last.date.timeIntervalSince(start.date)
+            // A reference must span at least half the requested period.
+            guard duration >= window.lookback / 2 else { return failure }
+            let drop = start.remaining - last.remaining
+            let gaps = zip(inWindow, inWindow.dropFirst()).contains {
+                $0.1.date.timeIntervalSince($0.0.date) > maximumGap
+            }
+            return .ready(UsageTrendForecast(anchor: last, rate: drop / duration,
+                slowRate: max(0, drop - 1) / duration, fastRate: (drop + 1) / duration,
+                referenceDuration: duration, hasSamplingGaps: gaps))
+        }
         // Measure actual observed intervals, clipped to the selected window.
-        // Offline time never supplies coverage or consumption evidence.
+        // Unobserved gaps do not supply continuous coverage or timed steps.
         var observedDuration: TimeInterval = 0
         var steps: [Double] = []
         for (a, b) in zip(recent, recent.dropFirst()) {
@@ -275,7 +293,7 @@ enum UsageTrend {
             let drop = a.remaining - b.remaining
             if a.date >= cutoff, drop > 0.000001 { steps.append(drop) }
         }
-        guard observedDuration + 0.000001 >= window.minimumObservedDuration else { return .insufficientCoverage }
+        guard observedDuration + 0.000001 >= window.minimumObservedDuration else { return coarseEstimate(or: .insufficientCoverage) }
         // Equally spaced endpoints give wall time equal weight regardless of poll frequency.
         // Interpolation is allowed only inside observed intervals of at most 15 minutes.
         var points: [(time: TimeInterval, remaining: Double)] = []
@@ -299,33 +317,24 @@ enum UsageTrend {
             points.append((target.timeIntervalSince(cutoff), remaining))
         }
         let requiredPoints = window == .hour ? count : Int(ceil(Double(count + 1) * 2 / 3))
-        guard points.count >= requiredPoints else { return .insufficientCoverage }
+        guard points.count >= requiredPoints else { return coarseEstimate(or: .insufficientCoverage) }
         let observed = recent.drop(while: { $0.date < cutoff })
         // A decline straddling the cutoff has uncertain timing, even when a
         // long read gap prevents interpolation at the boundary.
         let boundaryDrop = first.date < cutoff && recent[1].date > cutoff
             && first.remaining > recent[1].remaining
         if !boundaryDrop, observed.first?.remaining == last.remaining, points.first?.remaining == last.remaining {
-            return .ready(UsageTrendForecast(anchor: last, rate: 0, slowRate: 0, fastRate: 0))
+            return coarseEstimate(or: .insufficientSignal)
         }
-        // Boundary interpolation and unobserved gaps cannot manufacture signal.
         let observedDrop = steps.reduce(0, +)
-        guard let step = steps.min() else { return .insufficientSignal }
+        guard let step = steps.min() else { return coarseEstimate(or: .insufficientSignal) }
         let strongSignal = steps.count >= 3 && observedDrop + 0.000001 >= max(1, 3 * step)
-        if !strongSignal {
-            // Sparse integer readings support an observed average. The +/-1pp
-            // scenarios reflect rounding.
-            let supportsCoarseEstimate = window == .hour || (window == .eightHours && steps.count >= 2)
-            guard supportsCoarseEstimate, observedDrop + 0.000001 >= 1 else { return .insufficientSignal }
-            return .ready(UsageTrendForecast(anchor: last, rate: observedDrop / observedDuration,
-                slowRate: max(0, observedDrop - 1) / observedDuration,
-                fastRate: (observedDrop + 1) / observedDuration))
-        }
+        if !strongSignal { return coarseEstimate(or: .insufficientSignal) }
         let meanX = points.map(\.time).reduce(0, +) / Double(points.count)
         let meanY = points.map(\.remaining).reduce(0, +) / Double(points.count)
         let denominator = points.reduce(0) { $0 + pow($1.time - meanX, 2) }
         let rate = max(0, -points.reduce(0) { $0 + ($1.time - meanX) * ($1.remaining - meanY) } / denominator)
-        guard rate > 0 else { return .insufficientSignal }
+        guard rate > 0 else { return coarseEstimate(or: .insufficientSignal) }
         // Half-window average speeds reduce quantization spikes. Use the central
         // 80% of observed scenarios, not raw extrema or a confidence interval.
         let rates = points.indices.compactMap { i -> Double? in
@@ -334,7 +343,7 @@ enum UsageTrend {
             }) else { return nil }
             return max(0, (points[i].remaining - points[j].remaining) / (points[j].time - points[i].time))
         }.sorted()
-        guard !rates.isEmpty else { return .insufficientCoverage }
+        guard !rates.isEmpty else { return coarseEstimate(or: .insufficientCoverage) }
         func quantile(_ probability: Double) -> Double {
             let position = probability * Double(rates.count - 1)
             let lower = Int(position), upper = min(lower + 1, rates.count - 1)

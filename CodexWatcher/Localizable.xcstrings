@@ -4425,6 +4425,108 @@
           }
         }
       }
+    },
+    "近期消耗较低（粗估）": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Low recent consumption (rough estimate)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "近期消耗较低（粗估）"
+          }
+        }
+      }
+    },
+    "粗估约%@后耗尽": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Roughly %@ until exhausted"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "粗估约%@后耗尽"
+          }
+        }
+      }
+    },
+    "粗估可用到本次重置": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estimated to last until reset"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "粗估可用到本次重置"
+          }
+        }
+      }
+    },
+    "参考跨度 %@ · 含采样缺口": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Based on %@ · sampling gaps"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "参考跨度 %@ · 含采样缺口"
+          }
+        }
+      }
+    },
+    "参考跨度 %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Based on %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "参考跨度 %@"
+          }
+        }
+      }
+    },
+    "粗估采用参考跨度内首尾额度变化；阴影仅反映读数误差情景，未涵盖未来使用变化。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The rough estimate uses the quota change between reference endpoints. Shading reflects reading uncertainty only and does not cover future usage changes."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "粗估采用参考跨度内首尾额度变化；阴影仅反映读数误差情景，未涵盖未来使用变化。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
